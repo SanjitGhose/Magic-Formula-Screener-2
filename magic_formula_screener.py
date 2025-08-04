@@ -90,8 +90,7 @@ class MagicFormulaScreener:
                        "forwardPE": np.random.uniform(10, 30),
                        "trailingPE": np.random.uniform(12, 35),
                        "returnOnEquity": np.random.uniform(0.10, 0.25),
-                       "returnOnAssets": np.random.uniform(0.05, 0.15),
-                       "priceToBook": np.random.uniform(1.0, 5.0)}
+                       "returnOnAssets": np.random.uniform(0.05, 0.15)}
             
             hist_data = self._calculate_technical_indicators(hist_data)
             
@@ -138,8 +137,7 @@ class MagicFormulaScreener:
                 "forwardPE": np.random.uniform(10, 30),
                 "trailingPE": np.random.uniform(12, 35),
                 "returnOnEquity": np.random.uniform(0.10, 0.25),
-                "returnOnAssets": np.random.uniform(0.05, 0.15),
-                "priceToBook": np.random.uniform(1.0, 5.0)
+                "returnOnAssets": np.random.uniform(0.05, 0.15)
             },
             "current_price": prices[-1]
         }
@@ -167,7 +165,6 @@ class MagicFormulaScreener:
         """Calculate technical indicators"""
         try:
             if len(df) < 50:
-                # Need at least 50 days for a 50-day EMA and other indicators
                 return df
                 
             delta = df['Close'].diff()
@@ -205,19 +202,17 @@ class MagicFormulaScreener:
             fundamentals = stock_info["fundamentals"]
             price_data = stock_info["price_data"]
             
-            # --- Safely access metrics with defaults ---
-            market_cap = fundamentals.get('marketCap', 50000000000) / 10000000
+            market_cap_value = fundamentals.get('marketCap')
             pe_ratio = fundamentals.get('forwardPE', fundamentals.get('trailingPE', 20))
             roe = fundamentals.get('returnOnEquity', 0.15) * 100 if fundamentals.get('returnOnEquity') else 15
             roa = fundamentals.get('returnOnAssets', 0.08) * 100 if fundamentals.get('returnOnAssets') else 8
-            pb_ratio = fundamentals.get('priceToBook', 2.0)
             
+            market_cap = market_cap_value / 10000000 if market_cap_value else 50000000000 / 10000000
+
             roc = (roe + roa) / 2 if roe and roa else max(roe, roa) if roe or roa else 12
             earnings_yield = (1 / pe_ratio * 100) if pe_ratio and pe_ratio > 0 else 5
             magic_score = (roc * 0.6) + (earnings_yield * 0.4)
             
-            # --- Safely access technical indicators with defaults ---
-            # Check for column existence before accessing
             current_rsi = price_data['RSI'].iloc[-1] if 'RSI' in price_data.columns and not price_data['RSI'].isna().iloc[-1] else 50
             current_momentum = price_data['Momentum'].iloc[-1] if 'Momentum' in price_data.columns and not price_data['Momentum'].isna().iloc[-1] else 0
             
@@ -229,7 +224,7 @@ class MagicFormulaScreener:
             momentum_signal = self._get_momentum_signal(current_momentum)
             overall_signal = self._get_overall_signal(current_rsi, current_momentum, ema_20, ema_50)
 
-            commentary = self._generate_buffett_commentary(magic_score, pb_ratio, ema_trend)
+            commentary = self._generate_buffett_commentary(magic_score, ema_trend, rsi_signal, overall_signal)
             
             return {
                 "ticker": ticker,
@@ -241,7 +236,6 @@ class MagicFormulaScreener:
                 "earnings_yield": earnings_yield,
                 "magic_score": magic_score,
                 "pe_ratio": pe_ratio,
-                "pb_ratio": pb_ratio,
                 "rsi": current_rsi,
                 "momentum": current_momentum,
                 "ema_trend": ema_trend,
@@ -254,18 +248,20 @@ class MagicFormulaScreener:
         except Exception as e:
             return None
 
-    def _generate_buffett_commentary(self, magic_score, pb_ratio, ema_trend):
+    def _generate_buffett_commentary(self, magic_score, ema_trend, rsi_signal, overall_signal):
         """Generates a simple, Buffett-style commentary based on key metrics."""
-        if magic_score > 15 and pb_ratio < 3 and ema_trend == "BULLISH":
-            return "This looks like a wonderful business at a fair price. The numbers suggest strong returns and a reasonable valuation. Keep it in your circle of competence."
-        elif magic_score > 12 and pb_ratio < 4:
-            return "The fundamentals here are decent. It's a business worth understanding, but the price might not be a screaming bargain. Patience is a virtue."
-        elif pb_ratio > 5:
-            return "The price-to-book ratio is quite high. Remember, it's far better to buy a wonderful business at a fair price than a fair business at a wonderful price."
+        if magic_score > 15 and ema_trend == "BULLISH" and overall_signal in ["STRONG_BUY", "BUY"]:
+            return "This looks like a wonderful business at a fair price. The numbers suggest strong returns and a positive technical trend. Keep it in your circle of competence."
+        elif magic_score > 12 and ema_trend == "BULLISH":
+            return "The fundamentals here are decent. It's a business worth understanding, and the trend is favorable. It might be a worthwhile opportunity."
+        elif overall_signal == "STRONG_SELL" or rsi_signal == "SELL":
+            return "Caution is advised. The technical signals are very weak, indicating a strong downward trend. It's often smart to wait for a better pitch."
         elif ema_trend == "BEARISH":
-            return "The current market sentiment is not favorable. As Charlie Munger said, 'The big money is not in the buying and selling, but in the waiting.' It's often smart to wait for a better pitch."
+            return "The current market sentiment is not favorable, despite a decent magic score. As Charlie Munger said, 'The big money is not in the buying and selling, but in the waiting.' It's often wise to be patient."
+        elif magic_score > 8:
+            return "A business with a reasonable magic score. We must dig deeper into the company's moat and management quality to be sure of its long-term prospects."
         else:
-            return "A simple look tells me we need to dig deeper. The most important thing to do is to know what you know and know what you don't know."
+            return "The fundamentals are not screamingly attractive. A simple look tells me we need to dig deeper, or move on to a better opportunity."
     
     def _get_rsi_signal(self, rsi: float) -> str:
         if rsi < 30: return "BUY"
@@ -295,7 +291,7 @@ class MagicFormulaScreener:
         elif score <= -2: return "STRONG_SELL"
         elif score <= -1: return "SELL"
         else: return "HOLD"
-    
+
     def screen_stocks(self, min_market_cap: float = 1000, top_n: int = 20) -> pd.DataFrame:
         """Screen stocks using Magic Formula"""
         results = []
@@ -374,6 +370,13 @@ def main():
         .signal-hold { color: #f0ad4e; }
         .signal-sell { color: #d9534f; }
         .signal-strong-sell { color: #c0392b; font-weight: bold; }
+        
+        .ema-bullish { color: #28a745; }
+        .ema-bearish { color: #d9534f; }
+        
+        .rsi-overbought { color: #d9534f; }
+        .rsi-oversold { color: #5cb85c; }
+        .rsi-neutral { color: #f0ad4e; }
     </style>
     """, unsafe_allow_html=True)
     
@@ -454,10 +457,9 @@ def main():
         
         ticker_list = st.session_state.results['ticker'].tolist()
         
-        # Set a default selected value if the previous one is no longer in the list
         if st.session_state.selected_ticker not in ticker_list and ticker_list:
             st.session_state.selected_ticker = ticker_list[0]
-        
+            
         if ticker_list:
             selected_ticker = st.sidebar.selectbox("Select a Ticker to Analyze", 
                                                     ticker_list, 
@@ -481,62 +483,61 @@ def main():
         display_df['Rank'] = range(1, len(display_df) + 1)
         display_df['Price (₹)'] = display_df['current_price'].apply(lambda x: f"₹{x:.2f}")
         display_df['Magic Score'] = display_df['magic_score'].apply(lambda x: f"{x:.2f}")
-        display_df['P/B Ratio'] = display_df['pb_ratio'].apply(lambda x: f"{x:.2f}")
+        display_df['RSI'] = display_df['rsi'].apply(lambda x: f"{x:.2f}")
+        display_df['Momentum'] = display_df['momentum'].apply(lambda x: f"{x:.2f}")
         
         display_columns = [
-            'Rank', 'name', 'ticker', 'Price (₹)', 'Magic Score', 'P/B Ratio',
-            'rsi_signal', 'momentum_signal', 'ema_trend', 'overall_signal'
+            'Rank', 'name', 'ticker', 'Price (₹)', 'Magic Score', 'ema_trend', 'rsi', 'momentum', 'overall_signal'
         ]
         
         styled_df = display_df[display_columns].rename(columns={
-            'name': 'Company', 'ticker': 'Ticker', 'rsi_signal': 'RSI Signal',
-            'momentum_signal': 'Momentum', 'ema_trend': 'EMA Trend', 'overall_signal': 'Overall Signal'
+            'name': 'Company', 'ticker': 'Ticker', 'ema_trend': 'EMA Trend',
+            'rsi': 'RSI', 'momentum': 'Momentum', 'overall_signal': 'Overall Signal'
         })
         
-        styled_df_html = styled_df.to_html(escape=False, classes='stTable')
+        styled_df['Overall Signal'] = styled_df['Overall Signal'].apply(lambda x: x.replace('_', ' ').title())
+        styled_df['EMA Trend'] = styled_df['EMA Trend'].apply(lambda x: x.title())
+
+        # Dynamic HTML table creation for color coding
+        styled_df_html = styled_df.to_html(escape=False)
+        styled_df_html = styled_df_html.replace('<td>Strong Buy</td>', '<td class="signal-strong-buy">Strong Buy</td>')
+        styled_df_html = styled_df_html.replace('<td>Buy</td>', '<td class="signal-buy">Buy</td>')
+        styled_df_html = styled_df_html.replace('<td>Hold</td>', '<td class="signal-hold">Hold</td>')
+        styled_df_html = styled_df_html.replace('<td>Sell</td>', '<td class="signal-sell">Sell</td>')
+        styled_df_html = styled_df_html.replace('<td>Strong Sell</td>', '<td class="signal-strong-sell">Strong Sell</td>')
+
+        styled_df_html = styled_df_html.replace('<td>Bullish</td>', '<td class="ema-bullish">Bullish</td>')
+        styled_df_html = styled_df_html.replace('<td>Bearish</td>', '<td class="ema-bearish">Bearish</td>')
         
-        styled_df_html = styled_df_html.replace('<td>STRONG_BUY</td>', '<td style="color:#28a745; font-weight:bold;">STRONG_BUY</td>')
-        styled_df_html = styled_df_html.replace('<td>BUY</td>', '<td style="color:#5cb85c; font-weight:bold;">BUY</td>')
-        styled_df_html = styled_df_html.replace('<td>HOLD</td>', '<td style="color:#f0ad4e; font-weight:bold;">HOLD</td>')
-        styled_df_html = styled_df_html.replace('<td>SELL</td>', '<td style="color:#d9534f; font-weight:bold;">SELL</td>')
-        styled_df_html = styled_df_html.replace('<td>STRONG_SELL</td>', '<td style="color:#c0392b; font-weight:bold;">STRONG_SELL</td>')
         st.markdown(styled_df_html, unsafe_allow_html=True)
         
-        # --- Start of the corrected section for commentary and charts ---
+        # --- Detailed Analysis Section ---
         if st.session_state.selected_ticker:
-            # Safely get the stock data from the screened results
             selected_stock_data_df = st.session_state.results[st.session_state.results['ticker'] == st.session_state.selected_ticker]
             
             if not selected_stock_data_df.empty:
                 selected_stock_data = selected_stock_data_df.iloc[0]
                 
-                # Use st.markdown to display the Overall Signal with a color based on the signal type
                 signal_color_map = {
-                    "STRONG_BUY": "#28a745",
-                    "BUY": "#5cb85c",
-                    "HOLD": "#f0ad4e",
-                    "SELL": "#d9534f",
-                    "STRONG_SELL": "#c0392b"
+                    "STRONG_BUY": "#28a745", "BUY": "#5cb85c",
+                    "HOLD": "#f0ad4e", "SELL": "#d9534f", "STRONG_SELL": "#c0392b"
                 }
-                
+
                 overall_signal = selected_stock_data.get('overall_signal', 'N/A')
                 signal_color = signal_color_map.get(overall_signal, "#ffffff")
                 
                 st.subheader(f"Detailed Analysis for {selected_stock_data['name']}")
-                st.markdown(f"### Overall Signal: <span style='color: {signal_color};'>**{overall_signal}**</span>", unsafe_allow_html=True)
-
-                # Now display the Buffett commentary
+                
+                st.markdown(f"### Overall Signal: <span style='color: {signal_color};'>**{overall_signal.replace('_', ' ').title()}**</span>", unsafe_allow_html=True)
+                
                 st.subheader("🗣️ Buffett's Perspective")
                 st.info(selected_stock_data['buffett_commentary'])
                 
-                # Proceed with plotting the charts
                 ticker_data = st.session_state.screener.stock_data.get(st.session_state.selected_ticker)
                 
-                # Check for sufficient data before plotting
                 if ticker_data and not ticker_data['price_data'].empty and len(ticker_data['price_data']) >= 50:
                     price_data = ticker_data['price_data']
                     
-                    # Check for required columns before plotting
                     if not all(col in price_data.columns for col in ['Close', 'Open', 'High', 'Low', 'EMA_20', 'EMA_50', 'RSI', 'MACD', 'MACD_Signal', 'MACD_Hist']):
                         st.warning("⚠️ Insufficient data to generate all technical charts. Displaying basic price chart only.")
                         fig = go.Figure(data=[go.Candlestick(x=price_data.index, open=price_data['Open'], high=price_data['High'], low=price_data['Low'], close=price_data['Close'], name='Price')])
@@ -571,7 +572,6 @@ def main():
             else:
                 st.subheader(f"Detailed Analysis for {st.session_state.selected_ticker}")
                 st.warning("⚠️ The selected stock is not in the current screening results. Please re-run the screening if you have changed parameters.")
-        # --- End of the corrected section ---
 
         st.header("📈 Analysis Dashboard")
         
