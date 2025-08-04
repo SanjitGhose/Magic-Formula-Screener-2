@@ -502,62 +502,76 @@ def main():
         styled_df_html = styled_df_html.replace('<td>STRONG_SELL</td>', '<td style="color:#c0392b; font-weight:bold;">STRONG_SELL</td>')
         st.markdown(styled_df_html, unsafe_allow_html=True)
         
-        # --- Start of Modified Section for Commentary and Charts ---
+        # --- Start of the corrected section for commentary and charts ---
         if st.session_state.selected_ticker:
-            # Safely get the stock data and ensure it exists
+            # Safely get the stock data from the screened results
             selected_stock_data_df = st.session_state.results[st.session_state.results['ticker'] == st.session_state.selected_ticker]
-            ticker_data = st.session_state.screener.stock_data.get(st.session_state.selected_ticker)
             
-            # Commentary Section
             if not selected_stock_data_df.empty:
                 selected_stock_data = selected_stock_data_df.iloc[0]
-                st.subheader(f"🗣️ Buffett's Perspective on {selected_stock_data['name']}")
-                st.info(selected_stock_data['buffett_commentary'])
-            else:
-                st.subheader(f"🗣️ Buffett's Perspective on {st.session_state.selected_ticker}")
-                st.warning("⚠️ No commentary available. The selected stock may not be in the current screening results.")
-
-            # Detailed Chart Analysis Section
-            st.subheader(f"Detailed Analysis for {st.session_state.selected_ticker}")
-            
-            # Check for sufficient data before plotting
-            if ticker_data and not ticker_data['price_data'].empty and len(ticker_data['price_data']) >= 50:
-                price_data = ticker_data['price_data']
                 
-                # Check for required columns before plotting
-                if not all(col in price_data.columns for col in ['Close', 'Open', 'High', 'Low', 'EMA_20', 'EMA_50', 'RSI', 'MACD', 'MACD_Signal', 'MACD_Hist']):
-                    st.warning("⚠️ Insufficient data to generate all technical charts. Displaying basic price chart only.")
-                    fig = go.Figure(data=[go.Candlestick(x=price_data.index, open=price_data['Open'], high=price_data['High'], low=price_data['Low'], close=price_data['Close'], name='Price')])
-                    fig.update_layout(title=f"Price Chart for {ticker_data['info']['name']}", template="plotly_dark", xaxis_rangeslider_visible=False)
-                    st.plotly_chart(fig, use_container_width=True)
+                # Use st.markdown to display the Overall Signal with a color based on the signal type
+                signal_color_map = {
+                    "STRONG_BUY": "#28a745",
+                    "BUY": "#5cb85c",
+                    "HOLD": "#f0ad4e",
+                    "SELL": "#d9534f",
+                    "STRONG_SELL": "#c0392b"
+                }
+                
+                overall_signal = selected_stock_data.get('overall_signal', 'N/A')
+                signal_color = signal_color_map.get(overall_signal, "#ffffff")
+                
+                st.subheader(f"Detailed Analysis for {selected_stock_data['name']}")
+                st.markdown(f"### Overall Signal: <span style='color: {signal_color};'>**{overall_signal}**</span>", unsafe_allow_html=True)
+
+                # Now display the Buffett commentary
+                st.subheader("🗣️ Buffett's Perspective")
+                st.info(selected_stock_data['buffett_commentary'])
+                
+                # Proceed with plotting the charts
+                ticker_data = st.session_state.screener.stock_data.get(st.session_state.selected_ticker)
+                
+                # Check for sufficient data before plotting
+                if ticker_data and not ticker_data['price_data'].empty and len(ticker_data['price_data']) >= 50:
+                    price_data = ticker_data['price_data']
+                    
+                    # Check for required columns before plotting
+                    if not all(col in price_data.columns for col in ['Close', 'Open', 'High', 'Low', 'EMA_20', 'EMA_50', 'RSI', 'MACD', 'MACD_Signal', 'MACD_Hist']):
+                        st.warning("⚠️ Insufficient data to generate all technical charts. Displaying basic price chart only.")
+                        fig = go.Figure(data=[go.Candlestick(x=price_data.index, open=price_data['Open'], high=price_data['High'], low=price_data['Low'], close=price_data['Close'], name='Price')])
+                        fig.update_layout(title=f"Price Chart for {ticker_data['info']['name']}", template="plotly_dark", xaxis_rangeslider_visible=False)
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        fig = make_subplots(rows=3, cols=1, shared_xaxes=True, 
+                                            vertical_spacing=0.1, 
+                                            row_heights=[0.5, 0.25, 0.25],
+                                            subplot_titles=(f"Price & Moving Averages for {ticker_data['info']['name']}", "Relative Strength Index (RSI)", "Moving Average Convergence Divergence (MACD)"))
+    
+                        fig.add_trace(go.Candlestick(x=price_data.index, open=price_data['Open'], high=price_data['High'], low=price_data['Low'], close=price_data['Close'], name='Price'), row=1, col=1)
+                        fig.add_trace(go.Scatter(x=price_data.index, y=price_data['EMA_20'], name='EMA 20', line=dict(color='#f2a600', width=2)), row=1, col=1)
+                        fig.add_trace(go.Scatter(x=price_data.index, y=price_data['EMA_50'], name='EMA 50', line=dict(color='#1e90ff', width=2)), row=1, col=1)
+    
+                        fig.add_trace(go.Scatter(x=price_data.index, y=price_data['RSI'], name='RSI', line=dict(color='#8a2be2')), row=2, col=1)
+                        fig.add_hline(y=70, line_dash="dash", line_color="#d9534f", row=2, col=1)
+                        fig.add_hline(y=30, line_dash="dash", line_color="#5cb85c", row=2, col=1)
+    
+                        colors = ['#28a745' if val >= 0 else '#d9534f' for val in price_data['MACD_Hist']]
+                        fig.add_trace(go.Bar(x=price_data.index, y=price_data['MACD_Hist'], name='MACD Hist', marker_color=colors), row=3, col=1)
+                        fig.add_trace(go.Scatter(x=price_data.index, y=price_data['MACD'], name='MACD', line=dict(color='white', width=1)), row=3, col=1)
+                        fig.add_trace(go.Scatter(x=price_data.index, y=price_data['MACD_Signal'], name='Signal', line=dict(color='#808080', width=1)), row=3, col=1)
+    
+                        fig.update_layout(height=800, template="plotly_dark", xaxis_rangeslider_visible=False,
+                                          title_font=dict(size=24, color='#4a90e2'),
+                                          paper_bgcolor="#1f2430", plot_bgcolor="#1f2430",
+                                          font=dict(color="#d0d0d0"))
+                        st.plotly_chart(fig, use_container_width=True)
                 else:
-                    fig = make_subplots(rows=3, cols=1, shared_xaxes=True, 
-                                        vertical_spacing=0.1, 
-                                        row_heights=[0.5, 0.25, 0.25],
-                                        subplot_titles=(f"Price & Moving Averages for {ticker_data['info']['name']}", "Relative Strength Index (RSI)", "Moving Average Convergence Divergence (MACD)"))
-
-                    fig.add_trace(go.Candlestick(x=price_data.index, open=price_data['Open'], high=price_data['High'], low=price_data['Low'], close=price_data['Close'], name='Price'), row=1, col=1)
-                    fig.add_trace(go.Scatter(x=price_data.index, y=price_data['EMA_20'], name='EMA 20', line=dict(color='#f2a600', width=2)), row=1, col=1)
-                    fig.add_trace(go.Scatter(x=price_data.index, y=price_data['EMA_50'], name='EMA 50', line=dict(color='#1e90ff', width=2)), row=1, col=1)
-
-                    fig.add_trace(go.Scatter(x=price_data.index, y=price_data['RSI'], name='RSI', line=dict(color='#8a2be2')), row=2, col=1)
-                    fig.add_hline(y=70, line_dash="dash", line_color="#d9534f", row=2, col=1)
-                    fig.add_hline(y=30, line_dash="dash", line_color="#5cb85c", row=2, col=1)
-
-                    colors = ['#28a745' if val >= 0 else '#d9534f' for val in price_data['MACD_Hist']]
-                    fig.add_trace(go.Bar(x=price_data.index, y=price_data['MACD_Hist'], name='MACD Hist', marker_color=colors), row=3, col=1)
-                    fig.add_trace(go.Scatter(x=price_data.index, y=price_data['MACD'], name='MACD', line=dict(color='white', width=1)), row=3, col=1)
-                    fig.add_trace(go.Scatter(x=price_data.index, y=price_data['MACD_Signal'], name='Signal', line=dict(color='#808080', width=1)), row=3, col=1)
-
-                    fig.update_layout(height=800, template="plotly_dark", xaxis_rangeslider_visible=False,
-                                      title_font=dict(size=24, color='#4a90e2'),
-                                      paper_bgcolor="#1f2430", plot_bgcolor="#1f2430",
-                                      font=dict(color="#d0d0d0"))
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.warning("⚠️ Insufficient historical data available to generate a detailed chart for this ticker. Please try again later.")
             else:
-                st.warning("⚠️ Insufficient historical data available to generate a detailed chart for this ticker. Please try again later.")
-        
-        # --- End of Modified Section ---
+                st.subheader(f"Detailed Analysis for {st.session_state.selected_ticker}")
+                st.warning("⚠️ The selected stock is not in the current screening results. Please re-run the screening if you have changed parameters.")
+        # --- End of the corrected section ---
 
         st.header("📈 Analysis Dashboard")
         
