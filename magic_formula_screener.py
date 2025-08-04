@@ -95,7 +95,7 @@ class MagicFormulaScreener:
                        "trailingPE": np.random.uniform(12, 35),
                        "returnOnEquity": np.random.uniform(0.10, 0.25),
                        "returnOnAssets": np.random.uniform(0.05, 0.15),
-                       "priceToBook": np.random.uniform(1.0, 5.0)} # Added Price-to-Book fallback
+                       "priceToBook": np.random.uniform(1.0, 5.0)}
             
             # Calculate technical indicators
             hist_data = self._calculate_technical_indicators(hist_data)
@@ -146,7 +146,7 @@ class MagicFormulaScreener:
                 "trailingPE": np.random.uniform(12, 35),
                 "returnOnEquity": np.random.uniform(0.10, 0.25),
                 "returnOnAssets": np.random.uniform(0.05, 0.15),
-                "priceToBook": np.random.uniform(1.0, 5.0) # Added Price-to-Book fallback
+                "priceToBook": np.random.uniform(1.0, 5.0)
             },
             "current_price": prices[-1]
         }
@@ -222,8 +222,6 @@ class MagicFormulaScreener:
             pe_ratio = fundamentals.get('forwardPE', fundamentals.get('trailingPE', 20))
             roe = fundamentals.get('returnOnEquity', 0.15) * 100 if fundamentals.get('returnOnEquity') else 15
             roa = fundamentals.get('returnOnAssets', 0.08) * 100 if fundamentals.get('returnOnAssets') else 8
-            
-            # New Feature: Price-to-Book Ratio
             pb_ratio = fundamentals.get('priceToBook', 2.0)
             
             # Calculate metrics
@@ -244,6 +242,9 @@ class MagicFormulaScreener:
             rsi_signal = self._get_rsi_signal(current_rsi)
             momentum_signal = self._get_momentum_signal(current_momentum)
             overall_signal = self._get_overall_signal(current_rsi, current_momentum, ema_20, ema_50)
+
+            # Generate Buffett-style commentary
+            commentary = self._generate_buffett_commentary(magic_score, pb_ratio, ema_trend)
             
             return {
                 "ticker": ticker,
@@ -255,17 +256,31 @@ class MagicFormulaScreener:
                 "earnings_yield": earnings_yield,
                 "magic_score": magic_score,
                 "pe_ratio": pe_ratio,
-                "pb_ratio": pb_ratio, # Added Price-to-Book to the results
+                "pb_ratio": pb_ratio,
                 "rsi": current_rsi,
                 "momentum": current_momentum,
                 "ema_trend": ema_trend,
                 "rsi_signal": rsi_signal,
                 "momentum_signal": momentum_signal,
-                "overall_signal": overall_signal
+                "overall_signal": overall_signal,
+                "buffett_commentary": commentary # Added commentary to the result
             }
             
         except Exception as e:
             return None
+
+    def _generate_buffett_commentary(self, magic_score, pb_ratio, ema_trend):
+        """Generates a simple, Buffett-style commentary based on key metrics."""
+        if magic_score > 15 and pb_ratio < 3 and ema_trend == "BULLISH":
+            return "This looks like a wonderful business at a fair price. The numbers suggest strong returns and a reasonable valuation. Keep it in your circle of competence."
+        elif magic_score > 12 and pb_ratio < 4:
+            return "The fundamentals here are decent. It's a business worth understanding, but the price might not be a screaming bargain. Patience is a virtue."
+        elif pb_ratio > 5:
+            return "The price-to-book ratio is quite high. Remember, it's far better to buy a wonderful business at a fair price than a fair business at a wonderful price."
+        elif ema_trend == "BEARISH":
+            return "The current market sentiment is not favorable. As Charlie Munger said, 'The big money is not in the buying and selling, but in the waiting.' It's often smart to wait for a better pitch."
+        else:
+            return "A simple look tells me we need to dig deeper. The most important thing to do is to know what you know and know what you don't know."
     
     def _get_rsi_signal(self, rsi: float) -> str:
         if rsi < 30:
@@ -382,7 +397,7 @@ def main():
     top_n = st.sidebar.slider(
         "📊 Number of Top Stocks", 
         min_value=5, 
-        max_value=40, # Adjusted max value to reflect the larger stock list
+        max_value=40,
         value=15,
         help="Select how many top-ranked stocks to display"
     )
@@ -429,7 +444,6 @@ def main():
         st.sidebar.markdown("---")
         st.sidebar.header("🔍 Detailed Stock View")
         
-        # Use a list of tickers from the results DataFrame for the dropdown
         ticker_list = st.session_state.results['ticker'].tolist()
         selected_ticker = st.sidebar.selectbox("Select a Ticker to Analyze", ticker_list)
         
@@ -469,7 +483,7 @@ def main():
         display_df['Rank'] = range(1, len(display_df) + 1)
         display_df['Price (₹)'] = display_df['current_price'].apply(lambda x: f"₹{x:.2f}")
         display_df['Magic Score'] = display_df['magic_score'].apply(lambda x: f"{x:.2f}")
-        display_df['P/B Ratio'] = display_df['pb_ratio'].apply(lambda x: f"{x:.2f}") # Added Price-to-Book
+        display_df['P/B Ratio'] = display_df['pb_ratio'].apply(lambda x: f"{x:.2f}")
         
         display_columns = [
             'Rank', 'name', 'ticker', 'Price (₹)', 'Magic Score', 'P/B Ratio',
@@ -483,7 +497,13 @@ def main():
         
         st.dataframe(styled_df, use_container_width=True, hide_index=True)
         
-        # New Feature: Display a detailed chart for the selected stock
+        # Display the Buffett commentary for the selected stock
+        if st.session_state.selected_ticker:
+            selected_stock_data = st.session_state.results[st.session_state.results['ticker'] == st.session_state.selected_ticker].iloc[0]
+            st.subheader(f"🗣️ Warren Buffett's Take on {selected_stock_data['name']}")
+            st.info(selected_stock_data['buffett_commentary'])
+        
+        # Detailed Chart View
         if st.session_state.selected_ticker:
             st.subheader(f"Detailed Analysis for {st.session_state.selected_ticker}")
             ticker_data = st.session_state.screener.stock_data.get(st.session_state.selected_ticker)
@@ -624,9 +644,9 @@ def main():
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.info("🏢 **35** Major Stocks") # Updated count
+            st.info("🏢 **35** Major Stocks")
         with col2:
-            st.info("📊 **9** Technical Indicators") # Updated count (Price-to-Book)
+            st.info("📊 **9** Technical Indicators")
         with col3:
             st.info("🎯 **Magic Formula** Scoring")
         with col4:
