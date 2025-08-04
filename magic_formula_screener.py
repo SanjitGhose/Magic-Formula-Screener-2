@@ -374,9 +374,12 @@ def main():
         .ema-bullish { color: #28a745; }
         .ema-bearish { color: #d9534f; }
         
-        .rsi-overbought { color: #d9534f; }
-        .rsi-oversold { color: #5cb85c; }
-        .rsi-neutral { color: #f0ad4e; }
+        .rsi-buy { color: #5cb85c; }
+        .rsi-sell { color: #d9534f; }
+        .rsi-hold { color: #f0ad4e; }
+        
+        .momentum-up { color: #5cb85c; }
+        .momentum-down { color: #d9534f; }
     </style>
     """, unsafe_allow_html=True)
     
@@ -483,20 +486,22 @@ def main():
         display_df['Rank'] = range(1, len(display_df) + 1)
         display_df['Price (₹)'] = display_df['current_price'].apply(lambda x: f"₹{x:.2f}")
         display_df['Magic Score'] = display_df['magic_score'].apply(lambda x: f"{x:.2f}")
-        display_df['RSI'] = display_df['rsi'].apply(lambda x: f"{x:.2f}")
-        display_df['Momentum'] = display_df['momentum'].apply(lambda x: f"{x:.2f}")
+        
+        # Use the signal columns instead of the numerical ones
+        display_df['RSI Signal'] = display_df['rsi_signal'].str.replace('_', ' ').str.title()
+        display_df['Momentum Signal'] = display_df['momentum_signal'].str.replace('_', ' ').str.title()
         
         display_columns = [
-            'Rank', 'name', 'ticker', 'Price (₹)', 'Magic Score', 'ema_trend', 'rsi', 'momentum', 'overall_signal'
+            'Rank', 'name', 'ticker', 'Price (₹)', 'Magic Score', 'ema_trend', 'RSI Signal', 'Momentum Signal', 'overall_signal'
         ]
         
         styled_df = display_df[display_columns].rename(columns={
             'name': 'Company', 'ticker': 'Ticker', 'ema_trend': 'EMA Trend',
-            'rsi': 'RSI', 'momentum': 'Momentum', 'overall_signal': 'Overall Signal'
+            'overall_signal': 'Overall Signal'
         })
         
-        styled_df['Overall Signal'] = styled_df['Overall Signal'].apply(lambda x: x.replace('_', ' ').title())
-        styled_df['EMA Trend'] = styled_df['EMA Trend'].apply(lambda x: x.title())
+        styled_df['Overall Signal'] = styled_df['Overall Signal'].str.replace('_', ' ').str.title()
+        styled_df['EMA Trend'] = styled_df['EMA Trend'].str.title()
 
         # Dynamic HTML table creation for color coding
         styled_df_html = styled_df.to_html(escape=False)
@@ -508,6 +513,15 @@ def main():
 
         styled_df_html = styled_df_html.replace('<td>Bullish</td>', '<td class="ema-bullish">Bullish</td>')
         styled_df_html = styled_df_html.replace('<td>Bearish</td>', '<td class="ema-bearish">Bearish</td>')
+
+        styled_df_html = styled_df_html.replace('<td>Buy</td>', '<td class="rsi-buy">Buy</td>')
+        styled_df_html = styled_df_html.replace('<td>Sell</td>', '<td class="rsi-sell">Sell</td>')
+        styled_df_html = styled_df_html.replace('<td>Hold</td>', '<td class="rsi-hold">Hold</td>')
+
+        styled_df_html = styled_df_html.replace('<td>Strong Up</td>', '<td class="momentum-up">Strong Up</td>')
+        styled_df_html = styled_df_html.replace('<td>Up</td>', '<td class="momentum-up">Up</td>')
+        styled_df_html = styled_df_html.replace('<td>Strong Down</td>', '<td class="momentum-down">Strong Down</td>')
+        styled_df_html = styled_df_html.replace('<td>Down</td>', '<td class="momentum-down">Down</td>')
         
         st.markdown(styled_df_html, unsafe_allow_html=True)
         
