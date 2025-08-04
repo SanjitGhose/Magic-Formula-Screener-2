@@ -206,20 +206,28 @@ class MagicFormulaScreener:
             price_data = stock_info["price_data"]
             
             # --- Safely access metrics with defaults ---
-            market_cap = fundamentals.get('marketCap', 50000000000) / 10000000
+            market_cap_value = fundamentals.get('marketCap')
+            book_value = fundamentals.get('bookValue')
             pe_ratio = fundamentals.get('forwardPE', fundamentals.get('trailingPE', 20))
             roe = fundamentals.get('returnOnEquity', 0.15) * 100 if fundamentals.get('returnOnEquity') else 15
             roa = fundamentals.get('returnOnAssets', 0.08) * 100 if fundamentals.get('returnOnAssets') else 8
             
             # --- Corrected P/B Ratio Calculation ---
             # Prioritize calculated value for accuracy, fall back to direct value or default
-            market_cap_value = fundamentals.get('marketCap')
-            book_value = fundamentals.get('bookValue')
-            if market_cap_value and book_value and book_value != 0:
-                pb_ratio = market_cap_value / book_value
-            else:
-                pb_ratio = fundamentals.get('priceToBook', 2.0)
             
+            calculated_pb_ratio = np.nan
+            if market_cap_value and book_value and book_value > 0:
+                calculated_pb_ratio = market_cap_value / book_value
+            
+            source_pb_ratio = fundamentals.get('priceToBook', np.nan)
+            
+            # Final P/B ratio used for scoring
+            pb_ratio = calculated_pb_ratio if not np.isnan(calculated_pb_ratio) else source_pb_ratio
+            if np.isnan(pb_ratio) or pb_ratio <= 0:
+                pb_ratio = 2.0  # Fallback to a reasonable default
+            
+            market_cap = market_cap_value / 10000000 if market_cap_value else 50000000000 / 10000000
+
             roc = (roe + roa) / 2 if roe and roa else max(roe, roa) if roe or roa else 12
             earnings_yield = (1 / pe_ratio * 100) if pe_ratio and pe_ratio > 0 else 5
             magic_score = (roc * 0.6) + (earnings_yield * 0.4)
@@ -251,13 +259,15 @@ class MagicFormulaScreener:
                 "magic_score": magic_score,
                 "pe_ratio": pe_ratio,
                 "pb_ratio": pb_ratio,
+                "calculated_pb": calculated_pb_ratio,  # New: calculated value
+                "source_pb": source_pb_ratio,          # New: value from yfinance
                 "rsi": current_rsi,
                 "momentum": current_momentum,
                 "ema_trend": ema_trend,
                 "rsi_signal": rsi_signal,
                 "momentum_signal": momentum_signal,
                 "overall_signal": overall_signal,
-                "pb_signal": pb_signal, # New P/B Signal
+                "pb_signal": pb_signal, 
                 "buffett_commentary": commentary
             }
             
@@ -472,23 +482,6 @@ def main():
                 st.success(f"✅ Found {len(results)} qualifying stocks!")
     
     if not st.session_state.results.empty:
-        st.sidebar.markdown("---")
-        st.sidebar.header("🔍 Detailed Stock View")
-        
-        ticker_list = st.session_state.results['ticker'].tolist()
-        
-        # Set a default selected value if the previous one is no longer in the list
-        if st.session_state.selected_ticker not in ticker_list and ticker_list:
-            st.session_state.selected_ticker = ticker_list[0]
-        
-        if ticker_list:
-            selected_ticker = st.sidebar.selectbox("Select a Ticker to Analyze", 
-                                                    ticker_list, 
-                                                    index=ticker_list.index(st.session_state.selected_ticker) if st.session_state.selected_ticker in ticker_list else 0)
-            if selected_ticker:
-                st.session_state.selected_ticker = selected_ticker
-    
-    if not st.session_state.results.empty:
         st.header("📊 Screening Results")
         
         col1, col2, col3, col4 = st.columns(4)
@@ -505,51 +498,50 @@ def main():
         display_df['Price (₹)'] = display_df['current_price'].apply(lambda x: f"₹{x:.2f}")
         display_df['Magic Score'] = display_df['magic_score'].apply(lambda x: f"{x:.2f}")
         display_df['P/B Ratio'] = display_df['pb_ratio'].apply(lambda x: f"{x:.2f}")
+        display_df['Calculated P/B'] = display_df['calculated_pb'].apply(lambda x: f"{x:.2f}" if pd.notna(x) else "N/A")
+
         
         display_columns = [
-            'Rank', 'name', 'ticker', 'Price (₹)', 'Magic Score', 'P/B Ratio',
+            'Rank', 'name', 'ticker', 'Price (₹)', 'Magic Score', 'P/B Ratio', 'Calculated P/B',
             'pb_signal', 'overall_signal'
         ]
         
         styled_df = display_df[display_columns].rename(columns={
             'name': 'Company', 'ticker': 'Ticker', 'pb_signal': 'P/B Valuation',
-            'overall_signal': 'Overall Signal'
+            'overall_signal': 'Overall Signal', 'pb_ratio': 'P/B (Used)'
         })
+        
+        # Mapping to replace the technical signal strings with a better format for display
+        styled_df['Overall Signal'] = styled_df['Overall Signal'].apply(lambda x: x.replace('_', ' ').title())
+        styled_df['P/B Valuation'] = styled_df['P/B Valuation'].apply(lambda x: x.replace('_', ' ').title())
         
         styled_df_html = styled_df.to_html(escape=False, classes='stTable')
         
-        styled_df_html = styled_df_html.replace('<td>STRONG_BUY</td>', '<td style="color:#28a745; font-weight:bold;">STRONG_BUY</td>')
-        styled_df_html = styled_df_html.replace('<td>BUY</td>', '<td style="color:#5cb85c; font-weight:bold;">BUY</td>')
-        styled_df_html = styled_df_html.replace('<td>HOLD</td>', '<td style="color:#f0ad4e; font-weight:bold;">HOLD</td>')
-        styled_df_html = styled_df_html.replace('<td>SELL</td>', '<td style="color:#d9534f; font-weight:bold;">SELL</td>')
-        styled_df_html = styled_df_html.replace('<td>STRONG_SELL</td>', '<td style="color:#c0392b; font-weight:bold;">STRONG_SELL</td>')
-        styled_df_html = styled_df_html.replace('<td>Undervalued</td>', '<td style="color:#5cb85c; font-weight:bold;">Undervalued</td>')
-        styled_df_html = styled_df_html.replace('<td>Correctly Valued</td>', '<td style="color:#f0ad4e; font-weight:bold;">Correctly Valued</td>')
-        styled_df_html = styled_df_html.replace('<td>Overvalued</td>', '<td style="color:#d9534f; font-weight:bold;">Overvalued</td>')
-        
+        # Apply CSS classes for color coding
+        styled_df_html = styled_df_html.replace('<td>Strong Buy</td>', '<td class="signal-strong-buy">Strong Buy</td>')
+        styled_df_html = styled_df_html.replace('<td>Buy</td>', '<td class="signal-buy">Buy</td>')
+        styled_df_html = styled_df_html.replace('<td>Hold</td>', '<td class="signal-hold">Hold</td>')
+        styled_df_html = styled_df_html.replace('<td>Sell</td>', '<td class="signal-sell">Sell</td>')
+        styled_df_html = styled_df_html.replace('<td>Strong Sell</td>', '<td class="signal-strong-sell">Strong Sell</td>')
+        styled_df_html = styled_df_html.replace('<td>Undervalued</td>', '<td class="pb-undervalued">Undervalued</td>')
+        styled_df_html = styled_df_html.replace('<td>Correctly Valued</td>', '<td class="pb-correctly_valued">Correctly Valued</td>')
+        styled_df_html = styled_df_html.replace('<td>Overvalued</td>', '<td class="pb-overvalued">Overvalued</td>')
+
         st.markdown(styled_df_html, unsafe_allow_html=True)
         
-        # --- Start of the corrected section for commentary and charts ---
+        # --- Detailed Analysis Section ---
         if st.session_state.selected_ticker:
-            # Safely get the stock data from the screened results
             selected_stock_data_df = st.session_state.results[st.session_state.results['ticker'] == st.session_state.selected_ticker]
             
             if not selected_stock_data_df.empty:
                 selected_stock_data = selected_stock_data_df.iloc[0]
                 
-                # Use st.markdown to display the Overall Signal and P/B Valuation
                 signal_color_map = {
-                    "STRONG_BUY": "#28a745",
-                    "BUY": "#5cb85c",
-                    "HOLD": "#f0ad4e",
-                    "SELL": "#d9534f",
-                    "STRONG_SELL": "#c0392b"
+                    "STRONG_BUY": "#28a745", "BUY": "#5cb85c",
+                    "HOLD": "#f0ad4e", "SELL": "#d9534f", "STRONG_SELL": "#c0392b"
                 }
-                
                 pb_color_map = {
-                    "Undervalued": "#5cb85c",
-                    "Correctly Valued": "#f0ad4e",
-                    "Overvalued": "#d9534f"
+                    "Undervalued": "#5cb85c", "Correctly Valued": "#f0ad4e", "Overvalued": "#d9534f"
                 }
 
                 overall_signal = selected_stock_data.get('overall_signal', 'N/A')
@@ -562,23 +554,18 @@ def main():
                 
                 cols = st.columns(2)
                 with cols[0]:
-                    st.markdown(f"### Overall Signal: <span style='color: {signal_color};'>**{overall_signal}**</span>", unsafe_allow_html=True)
+                    st.markdown(f"### Overall Signal: <span style='color: {signal_color};'>**{overall_signal.replace('_', ' ').title()}**</span>", unsafe_allow_html=True)
                 with cols[1]:
                     st.markdown(f"### P/B Valuation: <span style='color: {pb_color};'>**{pb_signal}**</span>", unsafe_allow_html=True)
 
-
-                # Now display the Buffett commentary
                 st.subheader("🗣️ Buffett's Perspective")
                 st.info(selected_stock_data['buffett_commentary'])
                 
-                # Proceed with plotting the charts
                 ticker_data = st.session_state.screener.stock_data.get(st.session_state.selected_ticker)
                 
-                # Check for sufficient data before plotting
                 if ticker_data and not ticker_data['price_data'].empty and len(ticker_data['price_data']) >= 50:
                     price_data = ticker_data['price_data']
                     
-                    # Check for required columns before plotting
                     if not all(col in price_data.columns for col in ['Close', 'Open', 'High', 'Low', 'EMA_20', 'EMA_50', 'RSI', 'MACD', 'MACD_Signal', 'MACD_Hist']):
                         st.warning("⚠️ Insufficient data to generate all technical charts. Displaying basic price chart only.")
                         fig = go.Figure(data=[go.Candlestick(x=price_data.index, open=price_data['Open'], high=price_data['High'], low=price_data['Low'], close=price_data['Close'], name='Price')])
@@ -613,7 +600,6 @@ def main():
             else:
                 st.subheader(f"Detailed Analysis for {st.session_state.selected_ticker}")
                 st.warning("⚠️ The selected stock is not in the current screening results. Please re-run the screening if you have changed parameters.")
-        # --- End of the corrected section ---
 
         st.header("📈 Analysis Dashboard")
         
