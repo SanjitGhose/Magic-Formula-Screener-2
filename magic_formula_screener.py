@@ -537,25 +537,35 @@ def generate_candlestick_chart(price_data: pd.DataFrame, title: str) -> go.Figur
     
     return fig
 
-# --- Callback function to handle DataFrame row selection ---
+# --- New, robust callback function to handle DataFrame row selection ---
 def handle_dataframe_selection():
     """Updates session state with the selected ticker from the DataFrame."""
-    # Retrieve the selection from the DataFrame widget state
-    selected_rows_info = st.session_state.get('ranked_table')
+    # Retrieve the state of the 'ranked_table' DataFrame
+    # Using .get() for safety against KeyError if the widget state isn't initialized
+    table_state = st.session_state.get('ranked_table')
     
-    if selected_rows_info and 'selection' in selected_rows_info and selected_rows_info['selection']:
-        selected_index = selected_rows_info['selection'][0]
-        
-        # Check if the dataframe is in session state before trying to access it
-        if 'styled_results_df' in st.session_state:
-            styled_df = st.session_state.styled_results_df
-            if selected_index < len(styled_df):
+    # Check if the selection list is present and not empty
+    if table_state and 'selection' in table_state and table_state['selection']:
+        try:
+            # The selection is a list of indices, get the first one for single-row selection
+            selected_index = table_state['selection'][0]
+
+            # Access the pre-calculated DataFrame from session state
+            styled_df = st.session_state.get('styled_results_df')
+
+            # Ensure the index is valid for the current DataFrame
+            if styled_df is not None and 0 <= selected_index < len(styled_df):
                 selected_ticker = styled_df.iloc[selected_index]['Ticker']
                 st.session_state.selected_ticker = selected_ticker
-                return # Exit early after successful update
-    
-    # If no selection or an error occurred, reset the selected ticker
-    st.session_state.selected_ticker = None
+            else:
+                # If index is invalid, reset the selection
+                st.session_state.selected_ticker = None
+        except IndexError:
+            # This is a defensive catch, in case the list is empty despite the checks
+            st.session_state.selected_ticker = None
+    else:
+        # No row is selected, so reset the selected ticker
+        st.session_state.selected_ticker = None
 
 
 def main():
