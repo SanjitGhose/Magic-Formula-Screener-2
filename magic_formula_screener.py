@@ -749,6 +749,10 @@ def main():
             styled_df = display_df[['Rank', 'name', 'ticker', 'sector', 'Price (₹)', 'Magic Score', 'overall_signal']].rename(columns={
                 'name': 'Company', 'ticker': 'Ticker', 'overall_signal': 'Signal'
             })
+            
+            # Combine all signals into one column for the table
+            styled_df['Signals'] = display_df.apply(lambda row: f"Overall: {row['overall_signal']}, Trend: {row['ema_trend']}, RSI: {row['rsi_signal']}, Mom: {row['momentum_signal']}", axis=1)
+            styled_df = styled_df.drop(columns=['Signal'])
 
             # Store the styled DataFrame in session state so the callback can access it
             st.session_state['styled_results_df'] = styled_df
