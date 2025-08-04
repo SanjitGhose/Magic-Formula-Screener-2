@@ -69,7 +69,6 @@ class MagicFormulaScreener:
         try:
             ticker = stock_info["ticker"]
             
-            # Check cache
             cache_key = f"{ticker}_{period}"
             current_time = time.time()
             
@@ -167,7 +166,8 @@ class MagicFormulaScreener:
     def _calculate_technical_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculate technical indicators"""
         try:
-            if len(df) < 20:
+            if len(df) < 50:
+                # Need at least 50 days for a 50-day EMA and other indicators
                 return df
                 
             delta = df['Close'].diff()
@@ -205,6 +205,7 @@ class MagicFormulaScreener:
             fundamentals = stock_info["fundamentals"]
             price_data = stock_info["price_data"]
             
+            # --- Safely access metrics with defaults ---
             market_cap = fundamentals.get('marketCap', 50000000000) / 10000000
             pe_ratio = fundamentals.get('forwardPE', fundamentals.get('trailingPE', 20))
             roe = fundamentals.get('returnOnEquity', 0.15) * 100 if fundamentals.get('returnOnEquity') else 15
@@ -215,12 +216,13 @@ class MagicFormulaScreener:
             earnings_yield = (1 / pe_ratio * 100) if pe_ratio and pe_ratio > 0 else 5
             magic_score = (roc * 0.6) + (earnings_yield * 0.4)
             
-            # Use .get() with a default value to avoid KeyErrors on missing indicators
-            current_rsi = price_data.get('RSI', pd.Series([50])).iloc[-1] if 'RSI' in price_data.columns and not price_data['RSI'].isna().iloc[-1] else 50
-            current_momentum = price_data.get('Momentum', pd.Series([0])).iloc[-1] if 'Momentum' in price_data.columns and not price_data['Momentum'].isna().iloc[-1] else 0
+            # --- Safely access technical indicators with defaults ---
+            # Check for column existence before accessing
+            current_rsi = price_data['RSI'].iloc[-1] if 'RSI' in price_data.columns and not price_data['RSI'].isna().iloc[-1] else 50
+            current_momentum = price_data['Momentum'].iloc[-1] if 'Momentum' in price_data.columns and not price_data['Momentum'].isna().iloc[-1] else 0
             
-            ema_20 = price_data.get('EMA_20', pd.Series([price_data['Close'].iloc[-1]])).iloc[-1] if 'EMA_20' in price_data.columns and not price_data['EMA_20'].isna().iloc[-1] else price_data['Close'].iloc[-1]
-            ema_50 = price_data.get('EMA_50', pd.Series([price_data['Close'].iloc[-1]])).iloc[-1] if 'EMA_50' in price_data.columns and not price_data['EMA_50'].isna().iloc[-1] else price_data['Close'].iloc[-1]
+            ema_20 = price_data['EMA_20'].iloc[-1] if 'EMA_20' in price_data.columns and not price_data['EMA_20'].isna().iloc[-1] else price_data['Close'].iloc[-1]
+            ema_50 = price_data['EMA_50'].iloc[-1] if 'EMA_50' in price_data.columns and not price_data['EMA_50'].isna().iloc[-1] else price_data['Close'].iloc[-1]
             ema_trend = "BULLISH" if ema_20 > ema_50 else "BEARISH"
             
             rsi_signal = self._get_rsi_signal(current_rsi)
@@ -266,22 +268,15 @@ class MagicFormulaScreener:
             return "A simple look tells me we need to dig deeper. The most important thing to do is to know what you know and know what you don't know."
     
     def _get_rsi_signal(self, rsi: float) -> str:
-        if rsi < 30:
-            return "BUY"
-        elif rsi > 70:
-            return "SELL"
-        else:
-            return "HOLD"
+        if rsi < 30: return "BUY"
+        elif rsi > 70: return "SELL"
+        else: return "HOLD"
     
     def _get_momentum_signal(self, momentum: float) -> str:
-        if momentum > 5:
-            return "STRONG_UP"
-        elif momentum > 0:
-            return "UP"
-        elif momentum < -5:
-            return "STRONG_DOWN"
-        else:
-            return "DOWN"
+        if momentum > 5: return "STRONG_UP"
+        elif momentum > 0: return "UP"
+        elif momentum < -5: return "STRONG_DOWN"
+        else: return "DOWN"
     
     def _get_overall_signal(self, rsi: float, momentum: float, ema_20: float, ema_50: float) -> str:
         score = 0
@@ -458,14 +453,17 @@ def main():
         st.sidebar.header("🔍 Detailed Stock View")
         
         ticker_list = st.session_state.results['ticker'].tolist()
+        
         # Set a default selected value if the previous one is no longer in the list
         if st.session_state.selected_ticker not in ticker_list and ticker_list:
             st.session_state.selected_ticker = ticker_list[0]
-            
-        selected_ticker = st.sidebar.selectbox("Select a Ticker to Analyze", ticker_list, index=ticker_list.index(st.session_state.selected_ticker) if st.session_state.selected_ticker in ticker_list else 0)
         
-        if selected_ticker:
-            st.session_state.selected_ticker = selected_ticker
+        if ticker_list:
+            selected_ticker = st.sidebar.selectbox("Select a Ticker to Analyze", 
+                                                    ticker_list, 
+                                                    index=ticker_list.index(st.session_state.selected_ticker) if st.session_state.selected_ticker in ticker_list else 0)
+            if selected_ticker:
+                st.session_state.selected_ticker = selected_ticker
     
     if not st.session_state.results.empty:
         st.header("📊 Screening Results")
@@ -504,9 +502,13 @@ def main():
         styled_df_html = styled_df_html.replace('<td>STRONG_SELL</td>', '<td style="color:#c0392b; font-weight:bold;">STRONG_SELL</td>')
         st.markdown(styled_df_html, unsafe_allow_html=True)
         
+        # --- Start of Modified Section for Commentary and Charts ---
         if st.session_state.selected_ticker:
+            # Safely get the stock data and ensure it exists
             selected_stock_data_df = st.session_state.results[st.session_state.results['ticker'] == st.session_state.selected_ticker]
+            ticker_data = st.session_state.screener.stock_data.get(st.session_state.selected_ticker)
             
+            # Commentary Section
             if not selected_stock_data_df.empty:
                 selected_stock_data = selected_stock_data_df.iloc[0]
                 st.subheader(f"🗣️ Buffett's Perspective on {selected_stock_data['name']}")
@@ -515,11 +517,10 @@ def main():
                 st.subheader(f"🗣️ Buffett's Perspective on {st.session_state.selected_ticker}")
                 st.warning("⚠️ No commentary available. The selected stock may not be in the current screening results.")
 
-        if st.session_state.selected_ticker:
+            # Detailed Chart Analysis Section
             st.subheader(f"Detailed Analysis for {st.session_state.selected_ticker}")
-            ticker_data = st.session_state.screener.stock_data.get(st.session_state.selected_ticker)
             
-            # CRITICAL CHECK FOR MISSING DATA BEFORE PLOTTING
+            # Check for sufficient data before plotting
             if ticker_data and not ticker_data['price_data'].empty and len(ticker_data['price_data']) >= 50:
                 price_data = ticker_data['price_data']
                 
@@ -556,6 +557,8 @@ def main():
             else:
                 st.warning("⚠️ Insufficient historical data available to generate a detailed chart for this ticker. Please try again later.")
         
+        # --- End of Modified Section ---
+
         st.header("📈 Analysis Dashboard")
         
         tab1, tab2, tab3 = st.tabs(["📊 Score Distribution", "🏭 Sector Analysis", "📈 Technical Signals"])
