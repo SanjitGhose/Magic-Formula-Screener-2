@@ -210,7 +210,15 @@ class MagicFormulaScreener:
             pe_ratio = fundamentals.get('forwardPE', fundamentals.get('trailingPE', 20))
             roe = fundamentals.get('returnOnEquity', 0.15) * 100 if fundamentals.get('returnOnEquity') else 15
             roa = fundamentals.get('returnOnAssets', 0.08) * 100 if fundamentals.get('returnOnAssets') else 8
-            pb_ratio = fundamentals.get('priceToBook', 2.0)
+            
+            # --- Corrected P/B Ratio Calculation ---
+            # Prioritize calculated value for accuracy, fall back to direct value or default
+            market_cap_value = fundamentals.get('marketCap')
+            book_value = fundamentals.get('bookValue')
+            if market_cap_value and book_value and book_value != 0:
+                pb_ratio = market_cap_value / book_value
+            else:
+                pb_ratio = fundamentals.get('priceToBook', 2.0)
             
             roc = (roe + roa) / 2 if roe and roa else max(roe, roa) if roe or roa else 12
             earnings_yield = (1 / pe_ratio * 100) if pe_ratio and pe_ratio > 0 else 5
