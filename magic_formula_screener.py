@@ -224,7 +224,7 @@ class MagicFormulaScreener:
             momentum_signal = self._get_momentum_signal(current_momentum)
             overall_signal = self._get_overall_signal(current_rsi, current_momentum, ema_20, ema_50)
 
-            commentary = self._generate_buffett_commentary(magic_score, ema_trend)
+            commentary = self._generate_buffett_commentary(magic_score, ema_trend, rsi_signal, overall_signal)
             
             return {
                 "ticker": ticker,
@@ -248,16 +248,20 @@ class MagicFormulaScreener:
         except Exception as e:
             return None
 
-    def _generate_buffett_commentary(self, magic_score, ema_trend):
+    def _generate_buffett_commentary(self, magic_score, ema_trend, rsi_signal, overall_signal):
         """Generates a simple, Buffett-style commentary based on key metrics."""
-        if magic_score > 15 and ema_trend == "BULLISH":
-            return "This looks like a wonderful business at a fair price. The numbers suggest strong returns and a positive trend. Keep it in your circle of competence."
+        if magic_score > 15 and ema_trend == "BULLISH" and overall_signal in ["STRONG_BUY", "BUY"]:
+            return "This looks like a wonderful business at a fair price. The numbers suggest strong returns and a positive technical trend. Keep it in your circle of competence."
         elif magic_score > 12 and ema_trend == "BULLISH":
-            return "The fundamentals here are decent. It's a business worth understanding, and the trend is favorable. Patience is a virtue."
+            return "The fundamentals here are decent. It's a business worth understanding, and the trend is favorable. It might be a worthwhile opportunity."
+        elif overall_signal == "STRONG_SELL" or rsi_signal == "SELL":
+            return "Caution is advised. The technical signals are very weak, indicating a strong downward trend. It's often smart to wait for a better pitch."
         elif ema_trend == "BEARISH":
-            return "The current market sentiment is not favorable. As Charlie Munger said, 'The big money is not in the buying and selling, but in the waiting.' It's often smart to wait for a better pitch."
+            return "The current market sentiment is not favorable, despite a decent magic score. As Charlie Munger said, 'The big money is not in the buying and selling, but in the waiting.' It's often wise to be patient."
+        elif magic_score > 8:
+            return "A business with a reasonable magic score. We must dig deeper into the company's moat and management quality to be sure of its long-term prospects."
         else:
-            return "A simple look tells me we need to dig deeper. The most important thing to do is to know what you know and know what you don't know."
+            return "The fundamentals are not screamingly attractive. A simple look tells me we need to dig deeper, or move on to a better opportunity."
     
     def _get_rsi_signal(self, rsi: float) -> str:
         if rsi < 30: return "BUY"
