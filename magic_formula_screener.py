@@ -537,6 +537,27 @@ def generate_candlestick_chart(price_data: pd.DataFrame, title: str) -> go.Figur
     
     return fig
 
+# --- Callback function to handle DataFrame row selection ---
+def handle_dataframe_selection():
+    """Updates session state with the selected ticker from the DataFrame."""
+    # Retrieve the selection from the DataFrame widget state
+    selected_rows_info = st.session_state.get('ranked_table')
+    
+    if selected_rows_info and 'selection' in selected_rows_info and selected_rows_info['selection']:
+        selected_index = selected_rows_info['selection'][0]
+        
+        # Check if the dataframe is in session state before trying to access it
+        if 'styled_results_df' in st.session_state:
+            styled_df = st.session_state.styled_results_df
+            if selected_index < len(styled_df):
+                selected_ticker = styled_df.iloc[selected_index]['Ticker']
+                st.session_state.selected_ticker = selected_ticker
+                return # Exit early after successful update
+    
+    # If no selection or an error occurred, reset the selected ticker
+    st.session_state.selected_ticker = None
+
+
 def main():
     """Main Streamlit app logic."""
     
@@ -718,6 +739,9 @@ def main():
             styled_df = display_df[['Rank', 'name', 'ticker', 'sector', 'Price (₹)', 'Magic Score', 'overall_signal']].rename(columns={
                 'name': 'Company', 'ticker': 'Ticker', 'overall_signal': 'Signal'
             })
+
+            # Store the styled DataFrame in session state so the callback can access it
+            st.session_state['styled_results_df'] = styled_df
             
             # Use st.dataframe with selection_mode for easier row selection
             st.dataframe(
@@ -725,18 +749,9 @@ def main():
                 key='ranked_table',
                 hide_index=True,
                 use_container_width=True,
-                on_select=lambda selected_rows_info: st.session_state.update({'selected_row_indices': selected_rows_info['selection']}),
+                on_select=handle_dataframe_selection, # Use the new, robust callback
                 selection_mode="single-row"
             )
-
-            # Retrieve selected row index from session state
-            selected_row_indices = st.session_state.get('selected_row_indices', [])
-            if selected_row_indices:
-                selected_index = selected_row_indices[0] # Get the first selected index
-                selected_ticker = styled_df.iloc[selected_index]['Ticker']
-                st.session_state.selected_ticker = selected_ticker
-            else:
-                st.session_state.selected_ticker = None # Reset if nothing is selected
             
         with detail_col:
             st.subheader("Detailed Stock Analysis")
