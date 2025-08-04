@@ -215,11 +215,12 @@ class MagicFormulaScreener:
             earnings_yield = (1 / pe_ratio * 100) if pe_ratio and pe_ratio > 0 else 5
             magic_score = (roc * 0.6) + (earnings_yield * 0.4)
             
-            current_rsi = price_data['RSI'].iloc[-1] if 'RSI' in price_data.columns and not price_data['RSI'].isna().iloc[-1] else 50
-            current_momentum = price_data['Momentum'].iloc[-1] if 'Momentum' in price_data.columns and not price_data['Momentum'].isna().iloc[-1] else 0
+            # Use .get() with a default value to avoid KeyErrors on missing indicators
+            current_rsi = price_data.get('RSI', pd.Series([50])).iloc[-1] if 'RSI' in price_data.columns and not price_data['RSI'].isna().iloc[-1] else 50
+            current_momentum = price_data.get('Momentum', pd.Series([0])).iloc[-1] if 'Momentum' in price_data.columns and not price_data['Momentum'].isna().iloc[-1] else 0
             
-            ema_20 = price_data['EMA_20'].iloc[-1] if 'EMA_20' in price_data.columns and not price_data['EMA_20'].isna().iloc[-1] else price_data['Close'].iloc[-1]
-            ema_50 = price_data['EMA_50'].iloc[-1] if 'EMA_50' in price_data.columns and not price_data['EMA_50'].isna().iloc[-1] else price_data['Close'].iloc[-1]
+            ema_20 = price_data.get('EMA_20', pd.Series([price_data['Close'].iloc[-1]])).iloc[-1] if 'EMA_20' in price_data.columns and not price_data['EMA_20'].isna().iloc[-1] else price_data['Close'].iloc[-1]
+            ema_50 = price_data.get('EMA_50', pd.Series([price_data['Close'].iloc[-1]])).iloc[-1] if 'EMA_50' in price_data.columns and not price_data['EMA_50'].isna().iloc[-1] else price_data['Close'].iloc[-1]
             ema_trend = "BULLISH" if ema_20 > ema_50 else "BEARISH"
             
             rsi_signal = self._get_rsi_signal(current_rsi)
@@ -285,31 +286,20 @@ class MagicFormulaScreener:
     def _get_overall_signal(self, rsi: float, momentum: float, ema_20: float, ema_50: float) -> str:
         score = 0
         
-        if rsi < 30:
-            score += 2
-        elif rsi > 70:
-            score -= 2
+        if rsi < 30: score += 2
+        elif rsi > 70: score -= 2
         
-        if momentum > 2:
-            score += 1
-        elif momentum < -2:
-            score -= 1
+        if momentum > 2: score += 1
+        elif momentum < -2: score -= 1
         
-        if ema_20 > ema_50:
-            score += 1
-        else:
-            score -= 1
+        if ema_20 > ema_50: score += 1
+        else: score -= 1
         
-        if score >= 2:
-            return "STRONG_BUY"
-        elif score >= 1:
-            return "BUY"
-        elif score <= -2:
-            return "STRONG_SELL"
-        elif score <= -1:
-            return "SELL"
-        else:
-            return "HOLD"
+        if score >= 2: return "STRONG_BUY"
+        elif score >= 1: return "BUY"
+        elif score <= -2: return "STRONG_SELL"
+        elif score <= -1: return "SELL"
+        else: return "HOLD"
     
     def screen_stocks(self, min_market_cap: float = 1000, top_n: int = 20) -> pd.DataFrame:
         """Screen stocks using Magic Formula"""
@@ -424,7 +414,7 @@ def main():
     top_n = st.sidebar.slider(
         "📊 Number of Top Stocks", 
         min_value=5, 
-        max_value=len(st.session_state.screener.indian_stocks), # Dynamically set max value
+        max_value=len(st.session_state.screener.indian_stocks), 
         value=15,
         help="Select how many top-ranked stocks to display"
     )
@@ -468,7 +458,11 @@ def main():
         st.sidebar.header("🔍 Detailed Stock View")
         
         ticker_list = st.session_state.results['ticker'].tolist()
-        selected_ticker = st.sidebar.selectbox("Select a Ticker to Analyze", ticker_list)
+        # Set a default selected value if the previous one is no longer in the list
+        if st.session_state.selected_ticker not in ticker_list and ticker_list:
+            st.session_state.selected_ticker = ticker_list[0]
+            
+        selected_ticker = st.sidebar.selectbox("Select a Ticker to Analyze", ticker_list, index=ticker_list.index(st.session_state.selected_ticker) if st.session_state.selected_ticker in ticker_list else 0)
         
         if selected_ticker:
             st.session_state.selected_ticker = selected_ticker
@@ -501,62 +495,66 @@ def main():
             'momentum_signal': 'Momentum', 'ema_trend': 'EMA Trend', 'overall_signal': 'Overall Signal'
         })
         
-        def color_signal(val):
-            color = ''
-            if 'STRONG_BUY' in val: color = '#28a745'
-            elif 'BUY' in val: color = '#5cb85c'
-            elif 'HOLD' in val: color = '#f0ad4e'
-            elif 'SELL' in val: color = '#d9534f'
-            elif 'STRONG_SELL' in val: color = '#c0392b'
-            return f'color: {color}; font-weight: bold;'
-
         styled_df_html = styled_df.to_html(escape=False, classes='stTable')
         
-        # Apply CSS classes for coloring
         styled_df_html = styled_df_html.replace('<td>STRONG_BUY</td>', '<td style="color:#28a745; font-weight:bold;">STRONG_BUY</td>')
         styled_df_html = styled_df_html.replace('<td>BUY</td>', '<td style="color:#5cb85c; font-weight:bold;">BUY</td>')
         styled_df_html = styled_df_html.replace('<td>HOLD</td>', '<td style="color:#f0ad4e; font-weight:bold;">HOLD</td>')
         styled_df_html = styled_df_html.replace('<td>SELL</td>', '<td style="color:#d9534f; font-weight:bold;">SELL</td>')
         styled_df_html = styled_df_html.replace('<td>STRONG_SELL</td>', '<td style="color:#c0392b; font-weight:bold;">STRONG_SELL</td>')
-
         st.markdown(styled_df_html, unsafe_allow_html=True)
         
         if st.session_state.selected_ticker:
-            selected_stock_data = st.session_state.results[st.session_state.results['ticker'] == st.session_state.selected_ticker].iloc[0]
-            st.subheader(f"🗣️ Buffett's Perspective on {selected_stock_data['name']}")
-            st.info(selected_stock_data['buffett_commentary'])
-        
+            selected_stock_data_df = st.session_state.results[st.session_state.results['ticker'] == st.session_state.selected_ticker]
+            
+            if not selected_stock_data_df.empty:
+                selected_stock_data = selected_stock_data_df.iloc[0]
+                st.subheader(f"🗣️ Buffett's Perspective on {selected_stock_data['name']}")
+                st.info(selected_stock_data['buffett_commentary'])
+            else:
+                st.subheader(f"🗣️ Buffett's Perspective on {st.session_state.selected_ticker}")
+                st.warning("⚠️ No commentary available. The selected stock may not be in the current screening results.")
+
         if st.session_state.selected_ticker:
             st.subheader(f"Detailed Analysis for {st.session_state.selected_ticker}")
             ticker_data = st.session_state.screener.stock_data.get(st.session_state.selected_ticker)
-            if ticker_data:
+            
+            # CRITICAL CHECK FOR MISSING DATA BEFORE PLOTTING
+            if ticker_data and not ticker_data['price_data'].empty and len(ticker_data['price_data']) >= 50:
                 price_data = ticker_data['price_data']
                 
-                fig = make_subplots(rows=3, cols=1, shared_xaxes=True, 
-                                    vertical_spacing=0.1, 
-                                    row_heights=[0.5, 0.25, 0.25],
-                                    subplot_titles=(f"Price & Moving Averages for {selected_stock_data['name']}", "Relative Strength Index (RSI)", "Moving Average Convergence Divergence (MACD)"))
+                # Check for required columns before plotting
+                if not all(col in price_data.columns for col in ['Close', 'Open', 'High', 'Low', 'EMA_20', 'EMA_50', 'RSI', 'MACD', 'MACD_Signal', 'MACD_Hist']):
+                    st.warning("⚠️ Insufficient data to generate all technical charts. Displaying basic price chart only.")
+                    fig = go.Figure(data=[go.Candlestick(x=price_data.index, open=price_data['Open'], high=price_data['High'], low=price_data['Low'], close=price_data['Close'], name='Price')])
+                    fig.update_layout(title=f"Price Chart for {ticker_data['info']['name']}", template="plotly_dark", xaxis_rangeslider_visible=False)
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    fig = make_subplots(rows=3, cols=1, shared_xaxes=True, 
+                                        vertical_spacing=0.1, 
+                                        row_heights=[0.5, 0.25, 0.25],
+                                        subplot_titles=(f"Price & Moving Averages for {ticker_data['info']['name']}", "Relative Strength Index (RSI)", "Moving Average Convergence Divergence (MACD)"))
 
-                fig.add_trace(go.Candlestick(x=price_data.index, open=price_data['Open'], high=price_data['High'], low=price_data['Low'], close=price_data['Close'], name='Price'), row=1, col=1)
-                fig.add_trace(go.Scatter(x=price_data.index, y=price_data['EMA_20'], name='EMA 20', line=dict(color='#f2a600', width=2)), row=1, col=1)
-                fig.add_trace(go.Scatter(x=price_data.index, y=price_data['EMA_50'], name='EMA 50', line=dict(color='#1e90ff', width=2)), row=1, col=1)
+                    fig.add_trace(go.Candlestick(x=price_data.index, open=price_data['Open'], high=price_data['High'], low=price_data['Low'], close=price_data['Close'], name='Price'), row=1, col=1)
+                    fig.add_trace(go.Scatter(x=price_data.index, y=price_data['EMA_20'], name='EMA 20', line=dict(color='#f2a600', width=2)), row=1, col=1)
+                    fig.add_trace(go.Scatter(x=price_data.index, y=price_data['EMA_50'], name='EMA 50', line=dict(color='#1e90ff', width=2)), row=1, col=1)
 
-                fig.add_trace(go.Scatter(x=price_data.index, y=price_data['RSI'], name='RSI', line=dict(color='#8a2be2')), row=2, col=1)
-                fig.add_hline(y=70, line_dash="dash", line_color="#d9534f", row=2, col=1)
-                fig.add_hline(y=30, line_dash="dash", line_color="#5cb85c", row=2, col=1)
+                    fig.add_trace(go.Scatter(x=price_data.index, y=price_data['RSI'], name='RSI', line=dict(color='#8a2be2')), row=2, col=1)
+                    fig.add_hline(y=70, line_dash="dash", line_color="#d9534f", row=2, col=1)
+                    fig.add_hline(y=30, line_dash="dash", line_color="#5cb85c", row=2, col=1)
 
-                colors = ['#28a745' if val >= 0 else '#d9534f' for val in price_data['MACD_Hist']]
-                fig.add_trace(go.Bar(x=price_data.index, y=price_data['MACD_Hist'], name='MACD Hist', marker_color=colors), row=3, col=1)
-                fig.add_trace(go.Scatter(x=price_data.index, y=price_data['MACD'], name='MACD', line=dict(color='white', width=1)), row=3, col=1)
-                fig.add_trace(go.Scatter(x=price_data.index, y=price_data['MACD_Signal'], name='Signal', line=dict(color='#808080', width=1)), row=3, col=1)
+                    colors = ['#28a745' if val >= 0 else '#d9534f' for val in price_data['MACD_Hist']]
+                    fig.add_trace(go.Bar(x=price_data.index, y=price_data['MACD_Hist'], name='MACD Hist', marker_color=colors), row=3, col=1)
+                    fig.add_trace(go.Scatter(x=price_data.index, y=price_data['MACD'], name='MACD', line=dict(color='white', width=1)), row=3, col=1)
+                    fig.add_trace(go.Scatter(x=price_data.index, y=price_data['MACD_Signal'], name='Signal', line=dict(color='#808080', width=1)), row=3, col=1)
 
-                fig.update_layout(height=800, template="plotly_dark", xaxis_rangeslider_visible=False,
-                                  title_font=dict(size=24, color='#4a90e2'),
-                                  paper_bgcolor="#1f2430", plot_bgcolor="#1f2430",
-                                  font=dict(color="#d0d0d0"))
-                st.plotly_chart(fig, use_container_width=True)
+                    fig.update_layout(height=800, template="plotly_dark", xaxis_rangeslider_visible=False,
+                                      title_font=dict(size=24, color='#4a90e2'),
+                                      paper_bgcolor="#1f2430", plot_bgcolor="#1f2430",
+                                      font=dict(color="#d0d0d0"))
+                    st.plotly_chart(fig, use_container_width=True)
             else:
-                st.warning("⚠️ No detailed data found for this ticker. Please try fetching data again.")
+                st.warning("⚠️ Insufficient historical data available to generate a detailed chart for this ticker. Please try again later.")
         
         st.header("📈 Analysis Dashboard")
         
