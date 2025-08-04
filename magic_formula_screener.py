@@ -90,8 +90,7 @@ class MagicFormulaScreener:
                        "forwardPE": np.random.uniform(10, 30),
                        "trailingPE": np.random.uniform(12, 35),
                        "returnOnEquity": np.random.uniform(0.10, 0.25),
-                       "returnOnAssets": np.random.uniform(0.05, 0.15),
-                       "priceToBook": np.random.uniform(1.0, 5.0)}
+                       "returnOnAssets": np.random.uniform(0.05, 0.15)}
             
             hist_data = self._calculate_technical_indicators(hist_data)
             
@@ -138,8 +137,7 @@ class MagicFormulaScreener:
                 "forwardPE": np.random.uniform(10, 30),
                 "trailingPE": np.random.uniform(12, 35),
                 "returnOnEquity": np.random.uniform(0.10, 0.25),
-                "returnOnAssets": np.random.uniform(0.05, 0.15),
-                "priceToBook": np.random.uniform(1.0, 5.0)
+                "returnOnAssets": np.random.uniform(0.05, 0.15)
             },
             "current_price": prices[-1]
         }
@@ -167,7 +165,6 @@ class MagicFormulaScreener:
         """Calculate technical indicators"""
         try:
             if len(df) < 50:
-                # Need at least 50 days for a 50-day EMA and other indicators
                 return df
                 
             delta = df['Close'].diff()
@@ -205,26 +202,10 @@ class MagicFormulaScreener:
             fundamentals = stock_info["fundamentals"]
             price_data = stock_info["price_data"]
             
-            # --- Safely access metrics with defaults ---
             market_cap_value = fundamentals.get('marketCap')
-            book_value = fundamentals.get('bookValue')
             pe_ratio = fundamentals.get('forwardPE', fundamentals.get('trailingPE', 20))
             roe = fundamentals.get('returnOnEquity', 0.15) * 100 if fundamentals.get('returnOnEquity') else 15
             roa = fundamentals.get('returnOnAssets', 0.08) * 100 if fundamentals.get('returnOnAssets') else 8
-            
-            # --- Corrected P/B Ratio Calculation ---
-            # Prioritize calculated value for accuracy, fall back to direct value or default
-            
-            calculated_pb_ratio = np.nan
-            if market_cap_value and book_value and book_value > 0:
-                calculated_pb_ratio = market_cap_value / book_value
-            
-            source_pb_ratio = fundamentals.get('priceToBook', np.nan)
-            
-            # Final P/B ratio used for scoring
-            pb_ratio = calculated_pb_ratio if not np.isnan(calculated_pb_ratio) else source_pb_ratio
-            if np.isnan(pb_ratio) or pb_ratio <= 0:
-                pb_ratio = 2.0  # Fallback to a reasonable default
             
             market_cap = market_cap_value / 10000000 if market_cap_value else 50000000000 / 10000000
 
@@ -232,8 +213,6 @@ class MagicFormulaScreener:
             earnings_yield = (1 / pe_ratio * 100) if pe_ratio and pe_ratio > 0 else 5
             magic_score = (roc * 0.6) + (earnings_yield * 0.4)
             
-            # --- Safely access technical indicators with defaults ---
-            # Check for column existence before accessing
             current_rsi = price_data['RSI'].iloc[-1] if 'RSI' in price_data.columns and not price_data['RSI'].isna().iloc[-1] else 50
             current_momentum = price_data['Momentum'].iloc[-1] if 'Momentum' in price_data.columns and not price_data['Momentum'].isna().iloc[-1] else 0
             
@@ -244,9 +223,8 @@ class MagicFormulaScreener:
             rsi_signal = self._get_rsi_signal(current_rsi)
             momentum_signal = self._get_momentum_signal(current_momentum)
             overall_signal = self._get_overall_signal(current_rsi, current_momentum, ema_20, ema_50)
-            pb_signal = self._get_pb_signal(pb_ratio)
 
-            commentary = self._generate_buffett_commentary(magic_score, pb_ratio, ema_trend)
+            commentary = self._generate_buffett_commentary(magic_score, ema_trend)
             
             return {
                 "ticker": ticker,
@@ -258,30 +236,24 @@ class MagicFormulaScreener:
                 "earnings_yield": earnings_yield,
                 "magic_score": magic_score,
                 "pe_ratio": pe_ratio,
-                "pb_ratio": pb_ratio,
-                "calculated_pb": calculated_pb_ratio,  # New: calculated value
-                "source_pb": source_pb_ratio,          # New: value from yfinance
                 "rsi": current_rsi,
                 "momentum": current_momentum,
                 "ema_trend": ema_trend,
                 "rsi_signal": rsi_signal,
                 "momentum_signal": momentum_signal,
                 "overall_signal": overall_signal,
-                "pb_signal": pb_signal, 
                 "buffett_commentary": commentary
             }
             
         except Exception as e:
             return None
 
-    def _generate_buffett_commentary(self, magic_score, pb_ratio, ema_trend):
+    def _generate_buffett_commentary(self, magic_score, ema_trend):
         """Generates a simple, Buffett-style commentary based on key metrics."""
-        if magic_score > 15 and pb_ratio < 3 and ema_trend == "BULLISH":
-            return "This looks like a wonderful business at a fair price. The numbers suggest strong returns and a reasonable valuation. Keep it in your circle of competence."
-        elif magic_score > 12 and pb_ratio < 4:
-            return "The fundamentals here are decent. It's a business worth understanding, but the price might not be a screaming bargain. Patience is a virtue."
-        elif pb_ratio > 5:
-            return "The price-to-book ratio is quite high. Remember, it's far better to buy a wonderful business at a fair price than a fair business at a wonderful price."
+        if magic_score > 15 and ema_trend == "BULLISH":
+            return "This looks like a wonderful business at a fair price. The numbers suggest strong returns and a positive trend. Keep it in your circle of competence."
+        elif magic_score > 12 and ema_trend == "BULLISH":
+            return "The fundamentals here are decent. It's a business worth understanding, and the trend is favorable. Patience is a virtue."
         elif ema_trend == "BEARISH":
             return "The current market sentiment is not favorable. As Charlie Munger said, 'The big money is not in the buying and selling, but in the waiting.' It's often smart to wait for a better pitch."
         else:
@@ -315,15 +287,6 @@ class MagicFormulaScreener:
         elif score <= -2: return "STRONG_SELL"
         elif score <= -1: return "SELL"
         else: return "HOLD"
-
-    def _get_pb_signal(self, pb_ratio: float) -> str:
-        """Categorize a stock based on its P/B ratio."""
-        if pb_ratio < 1.5:
-            return "Undervalued"
-        elif pb_ratio > 4.0:
-            return "Overvalued"
-        else:
-            return "Correctly Valued"
 
     def screen_stocks(self, min_market_cap: float = 1000, top_n: int = 20) -> pd.DataFrame:
         """Screen stocks using Magic Formula"""
@@ -404,9 +367,12 @@ def main():
         .signal-sell { color: #d9534f; }
         .signal-strong-sell { color: #c0392b; font-weight: bold; }
 
-        .pb-undervalued { color: #5cb85c; font-weight: bold; }
-        .pb-correctly_valued { color: #f0ad4e; font-weight: bold; }
-        .pb-overvalued { color: #d9534f; font-weight: bold; }
+        .ema-bullish { color: #28a745; }
+        .ema-bearish { color: #d9534f; }
+        
+        .rsi-overbought { color: #d9534f; }
+        .rsi-oversold { color: #5cb85c; }
+        .rsi-neutral { color: #f0ad4e; }
     </style>
     """, unsafe_allow_html=True)
     
@@ -497,36 +463,31 @@ def main():
         display_df['Rank'] = range(1, len(display_df) + 1)
         display_df['Price (₹)'] = display_df['current_price'].apply(lambda x: f"₹{x:.2f}")
         display_df['Magic Score'] = display_df['magic_score'].apply(lambda x: f"{x:.2f}")
-        display_df['P/B Ratio'] = display_df['pb_ratio'].apply(lambda x: f"{x:.2f}")
-        display_df['Calculated P/B'] = display_df['calculated_pb'].apply(lambda x: f"{x:.2f}" if pd.notna(x) else "N/A")
-
+        display_df['RSI'] = display_df['rsi'].apply(lambda x: f"{x:.2f}")
+        display_df['Momentum'] = display_df['momentum'].apply(lambda x: f"{x:.2f}")
         
         display_columns = [
-            'Rank', 'name', 'ticker', 'Price (₹)', 'Magic Score', 'P/B Ratio', 'Calculated P/B',
-            'pb_signal', 'overall_signal'
+            'Rank', 'name', 'ticker', 'Price (₹)', 'Magic Score', 'ema_trend', 'rsi', 'momentum', 'overall_signal'
         ]
         
         styled_df = display_df[display_columns].rename(columns={
-            'name': 'Company', 'ticker': 'Ticker', 'pb_signal': 'P/B Valuation',
-            'overall_signal': 'Overall Signal', 'pb_ratio': 'P/B (Used)'
+            'name': 'Company', 'ticker': 'Ticker', 'ema_trend': 'EMA Trend',
+            'rsi': 'RSI', 'momentum': 'Momentum', 'overall_signal': 'Overall Signal'
         })
         
-        # Mapping to replace the technical signal strings with a better format for display
         styled_df['Overall Signal'] = styled_df['Overall Signal'].apply(lambda x: x.replace('_', ' ').title())
-        styled_df['P/B Valuation'] = styled_df['P/B Valuation'].apply(lambda x: x.replace('_', ' ').title())
         
         styled_df_html = styled_df.to_html(escape=False, classes='stTable')
         
-        # Apply CSS classes for color coding
         styled_df_html = styled_df_html.replace('<td>Strong Buy</td>', '<td class="signal-strong-buy">Strong Buy</td>')
         styled_df_html = styled_df_html.replace('<td>Buy</td>', '<td class="signal-buy">Buy</td>')
         styled_df_html = styled_df_html.replace('<td>Hold</td>', '<td class="signal-hold">Hold</td>')
         styled_df_html = styled_df_html.replace('<td>Sell</td>', '<td class="signal-sell">Sell</td>')
         styled_df_html = styled_df_html.replace('<td>Strong Sell</td>', '<td class="signal-strong-sell">Strong Sell</td>')
-        styled_df_html = styled_df_html.replace('<td>Undervalued</td>', '<td class="pb-undervalued">Undervalued</td>')
-        styled_df_html = styled_df_html.replace('<td>Correctly Valued</td>', '<td class="pb-correctly_valued">Correctly Valued</td>')
-        styled_df_html = styled_df_html.replace('<td>Overvalued</td>', '<td class="pb-overvalued">Overvalued</td>')
-
+        
+        styled_df_html = styled_df_html.replace('<td>BULLISH</td>', '<td class="ema-bullish">BULLISH</td>')
+        styled_df_html = styled_df_html.replace('<td>BEARISH</td>', '<td class="ema-bearish">BEARISH</td>')
+        
         st.markdown(styled_df_html, unsafe_allow_html=True)
         
         # --- Detailed Analysis Section ---
@@ -540,24 +501,14 @@ def main():
                     "STRONG_BUY": "#28a745", "BUY": "#5cb85c",
                     "HOLD": "#f0ad4e", "SELL": "#d9534f", "STRONG_SELL": "#c0392b"
                 }
-                pb_color_map = {
-                    "Undervalued": "#5cb85c", "Correctly Valued": "#f0ad4e", "Overvalued": "#d9534f"
-                }
 
                 overall_signal = selected_stock_data.get('overall_signal', 'N/A')
-                pb_signal = selected_stock_data.get('pb_signal', 'N/A')
-
                 signal_color = signal_color_map.get(overall_signal, "#ffffff")
-                pb_color = pb_color_map.get(pb_signal, "#ffffff")
                 
                 st.subheader(f"Detailed Analysis for {selected_stock_data['name']}")
                 
-                cols = st.columns(2)
-                with cols[0]:
-                    st.markdown(f"### Overall Signal: <span style='color: {signal_color};'>**{overall_signal.replace('_', ' ').title()}**</span>", unsafe_allow_html=True)
-                with cols[1]:
-                    st.markdown(f"### P/B Valuation: <span style='color: {pb_color};'>**{pb_signal}**</span>", unsafe_allow_html=True)
-
+                st.markdown(f"### Overall Signal: <span style='color: {signal_color};'>**{overall_signal.replace('_', ' ').title()}**</span>", unsafe_allow_html=True)
+                
                 st.subheader("🗣️ Buffett's Perspective")
                 st.info(selected_stock_data['buffett_commentary'])
                 
