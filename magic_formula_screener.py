@@ -26,7 +26,6 @@ class MagicFormulaScreener:
         
     def _get_indian_stock_list(self) -> List[Dict]:
         """Get list of major Indian stocks (expanded)"""
-        # Expanded list of stocks for broader screening opportunities
         return [
             {"name": "Reliance Industries", "ticker": "RELIANCE.NS", "sector": "Oil & Gas"},
             {"name": "Tata Consultancy Services", "ticker": "TCS.NS", "sector": "IT Services"},
@@ -53,7 +52,6 @@ class MagicFormulaScreener:
             {"name": "Mahindra & Mahindra", "ticker": "M&M.NS", "sector": "Automobile"},
             {"name": "Bajaj Auto", "ticker": "BAJAJ-AUTO.NS", "sector": "Automobile"},
             {"name": "JSW Steel", "ticker": "JSWSTEEL.NS", "sector": "Steel"},
-            # Adding more stocks for diversity
             {"name": "HDFC Life Insurance", "ticker": "HDFCLIFE.NS", "sector": "Insurance"},
             {"name": "SBI Life Insurance", "ticker": "SBILIFE.NS", "sector": "Insurance"},
             {"name": "Cipla", "ticker": "CIPLA.NS", "sector": "Pharma"},
@@ -86,7 +84,6 @@ class MagicFormulaScreener:
             if hist_data.empty:
                 return self._generate_mock_data(stock_info)
                 
-            # Get fundamental data with fallback
             try:
                 info = stock.info
             except:
@@ -97,7 +94,6 @@ class MagicFormulaScreener:
                        "returnOnAssets": np.random.uniform(0.05, 0.15),
                        "priceToBook": np.random.uniform(1.0, 5.0)}
             
-            # Calculate technical indicators
             hist_data = self._calculate_technical_indicators(hist_data)
             
             result = {
@@ -107,7 +103,6 @@ class MagicFormulaScreener:
                 "current_price": float(hist_data['Close'].iloc[-1])
             }
             
-            # Cache the result
             self.cache[cache_key] = result
             self.last_fetch_time[cache_key] = current_time
             
@@ -121,7 +116,6 @@ class MagicFormulaScreener:
         dates = pd.date_range(end=datetime.now(), periods=100, freq='D')
         base_price = np.random.uniform(100, 2000)
         
-        # Generate realistic price movements
         price_changes = np.random.normal(0, 0.02, 100)
         prices = [base_price]
         for change in price_changes[1:]:
@@ -155,7 +149,6 @@ class MagicFormulaScreener:
         """Fetch stock data with progress tracking"""
         total_stocks = len(self.indian_stocks)
         
-        # Using a ThreadPoolExecutor for a more efficient fetch
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(self.fetch_single_stock, stock_info, period): stock_info for stock_info in self.indian_stocks}
             
@@ -177,32 +170,27 @@ class MagicFormulaScreener:
             if len(df) < 20:
                 return df
                 
-            # RSI
             delta = df['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
             rs = gain / loss
             df['RSI'] = 100 - (100 / (1 + rs))
             
-            # EMA
             df['EMA_20'] = df['Close'].ewm(span=20).mean()
             df['EMA_50'] = df['Close'].ewm(span=50).mean()
             
-            # MACD
             ema_12 = df['Close'].ewm(span=12).mean()
             ema_26 = df['Close'].ewm(span=26).mean()
             df['MACD'] = ema_12 - ema_26
             df['MACD_Signal'] = df['MACD'].ewm(span=9).mean()
             df['MACD_Hist'] = df['MACD'] - df['MACD_Signal']
             
-            # Bollinger Bands
             sma_20 = df['Close'].rolling(window=20).mean()
             std_20 = df['Close'].rolling(window=20).std()
             df['BB_Upper'] = sma_20 + (std_20 * 2)
             df['BB_Lower'] = sma_20 - (std_20 * 2)
             df['BB_Middle'] = sma_20
             
-            # Momentum
             df['Momentum'] = df['Close'].pct_change(periods=10) * 100
             
             return df
@@ -217,33 +205,27 @@ class MagicFormulaScreener:
             fundamentals = stock_info["fundamentals"]
             price_data = stock_info["price_data"]
             
-            # Fundamental metrics with safe defaults
             market_cap = fundamentals.get('marketCap', 50000000000) / 10000000
             pe_ratio = fundamentals.get('forwardPE', fundamentals.get('trailingPE', 20))
             roe = fundamentals.get('returnOnEquity', 0.15) * 100 if fundamentals.get('returnOnEquity') else 15
             roa = fundamentals.get('returnOnAssets', 0.08) * 100 if fundamentals.get('returnOnAssets') else 8
             pb_ratio = fundamentals.get('priceToBook', 2.0)
             
-            # Calculate metrics
             roc = (roe + roa) / 2 if roe and roa else max(roe, roa) if roe or roa else 12
             earnings_yield = (1 / pe_ratio * 100) if pe_ratio and pe_ratio > 0 else 5
             magic_score = (roc * 0.6) + (earnings_yield * 0.4)
             
-            # Technical indicators
             current_rsi = price_data['RSI'].iloc[-1] if 'RSI' in price_data.columns and not price_data['RSI'].isna().iloc[-1] else 50
             current_momentum = price_data['Momentum'].iloc[-1] if 'Momentum' in price_data.columns and not price_data['Momentum'].isna().iloc[-1] else 0
             
-            # EMA Trend
             ema_20 = price_data['EMA_20'].iloc[-1] if 'EMA_20' in price_data.columns and not price_data['EMA_20'].isna().iloc[-1] else price_data['Close'].iloc[-1]
             ema_50 = price_data['EMA_50'].iloc[-1] if 'EMA_50' in price_data.columns and not price_data['EMA_50'].isna().iloc[-1] else price_data['Close'].iloc[-1]
             ema_trend = "BULLISH" if ema_20 > ema_50 else "BEARISH"
             
-            # Signals
             rsi_signal = self._get_rsi_signal(current_rsi)
             momentum_signal = self._get_momentum_signal(current_momentum)
             overall_signal = self._get_overall_signal(current_rsi, current_momentum, ema_20, ema_50)
 
-            # Generate Buffett-style commentary
             commentary = self._generate_buffett_commentary(magic_score, pb_ratio, ema_trend)
             
             return {
@@ -263,7 +245,7 @@ class MagicFormulaScreener:
                 "rsi_signal": rsi_signal,
                 "momentum_signal": momentum_signal,
                 "overall_signal": overall_signal,
-                "buffett_commentary": commentary # Added commentary to the result
+                "buffett_commentary": commentary
             }
             
         except Exception as e:
@@ -357,26 +339,71 @@ def main():
         initial_sidebar_state="expanded"
     )
     
-    # Custom CSS
+    # C-Suite Theming
     st.markdown("""
     <style>
-        .main > div { padding-top: 2rem; }
-        .stAlert { margin-top: 1rem; }
-        .metric-container {
-            background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%);
-            padding: 1rem; border-radius: 0.5rem; margin: 0.5rem 0;
+        .st-emotion-cache-18ni7ap { padding-top: 0rem; }
+        .st-emotion-cache-p2w5e4 { padding-top: 0rem; }
+        
+        .stButton button {
+            background-color: #2e3b5e;
+            color: white;
+            border: 1px solid #4a69bd;
+            border-radius: 5px;
+            padding: 10px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
         }
+        .stButton button:hover {
+            background-color: #4a69bd;
+            border-color: #6a89c9;
+        }
+        .st-emotion-cache-10trblm {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        .st-emotion-cache-p5k027 {
+            font-size: 1.25rem;
+            color: #b0c4de;
+        }
+        
+        /* Table Styling for a professional look */
+        .stTable {
+            border: 1px solid #4a69bd;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .stTable th {
+            background-color: #2e3b5e;
+            color: white;
+            font-weight: bold;
+        }
+        .stTable td {
+            background-color: #1e283e;
+            color: #e0e0e0;
+        }
+        
+        .signal-strong-buy { color: #28a745; font-weight: bold; }
+        .signal-buy { color: #5cb85c; }
+        .signal-hold { color: #f0ad4e; }
+        .signal-sell { color: #d9534f; }
+        .signal-strong-sell { color: #c0392b; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
     
     # Title
     st.markdown("""
-    # 🎯 Magic Formula Stock Screener
-    ### *Indian Markets Edition with Technical Analysis*
+    <h1 style="color: #4a90e2; font-weight: bold;">
+        <span style="font-size: 1.2em; vertical-align: top;">🎯</span>
+        Magic Formula Stock Screener
+    </h1>
+    <h3 style="color: #b0c4de; margin-top: -15px;">
+        Indian Markets Edition with C-Suite Insights
+    </h3>
     ---
-    """)
+    """, unsafe_allow_html=True)
     
-    # Initialize session state
     if 'screener' not in st.session_state:
         st.session_state.screener = MagicFormulaScreener()
         st.session_state.data_loaded = False
@@ -397,7 +424,7 @@ def main():
     top_n = st.sidebar.slider(
         "📊 Number of Top Stocks", 
         min_value=5, 
-        max_value=40,
+        max_value=len(st.session_state.screener.indian_stocks), # Dynamically set max value
         value=15,
         help="Select how many top-ranked stocks to display"
     )
@@ -411,12 +438,9 @@ def main():
         
         def update_progress(progress):
             progress_bar.progress(progress)
-            if progress < 0.3:
-                status_text.text("🔄 Initializing data fetch...")
-            elif progress < 0.7:
-                status_text.text("📊 Downloading stock data...")
-            else:
-                status_text.text("⚡ Processing indicators...")
+            if progress < 0.3: status_text.text("🔄 Initializing data fetch...")
+            elif progress < 0.7: status_text.text("📊 Downloading stock data...")
+            else: status_text.text("⚡ Processing indicators...")
         
         st.session_state.screener.fetch_stock_data(progress_callback=update_progress)
         st.session_state.data_loaded = True
@@ -439,7 +463,6 @@ def main():
                 st.session_state.results = results
                 st.success(f"✅ Found {len(results)} qualifying stocks!")
     
-    # New Feature: Select a stock from a dropdown to view its detailed chart
     if not st.session_state.results.empty:
         st.sidebar.markdown("---")
         st.sidebar.header("🔍 Detailed Stock View")
@@ -450,33 +473,16 @@ def main():
         if selected_ticker:
             st.session_state.selected_ticker = selected_ticker
     
-    # Main content
     if not st.session_state.results.empty:
-        # Metrics
         st.header("📊 Screening Results")
         
         col1, col2, col3, col4 = st.columns(4)
         
-        with col1:
-            st.metric("🏢 Total Stocks", len(st.session_state.results), f"Top {top_n} selected")
+        with col1: st.metric("🏢 Total Stocks", len(st.session_state.results))
+        with col2: st.metric("⭐ Avg Magic Score", f"{st.session_state.results['magic_score'].mean():.2f}")
+        with col3: st.metric("📈 Buy Signals", len(st.session_state.results[st.session_state.results['overall_signal'].str.contains('BUY', na=False)]))
+        with col4: st.metric("📊 Bullish Trends", len(st.session_state.results[st.session_state.results['ema_trend'] == 'BULLISH']))
         
-        with col2:
-            buy_signals = len(st.session_state.results[
-                st.session_state.results['overall_signal'].str.contains('BUY', na=False)
-            ])
-            st.metric("📈 Buy Signals", buy_signals, f"{buy_signals/len(st.session_state.results)*100:.1f}%")
-        
-        with col3:
-            avg_score = st.session_state.results['magic_score'].mean()
-            st.metric("⭐ Avg Magic Score", f"{avg_score:.2f}", "Higher is better")
-        
-        with col4:
-            bullish_trends = len(st.session_state.results[
-                st.session_state.results['ema_trend'] == 'BULLISH'
-            ])
-            st.metric("📊 Bullish Trends", bullish_trends, f"{bullish_trends/len(st.session_state.results)*100:.1f}%")
-        
-        # Results table
         st.subheader("🏆 Top Ranked Stocks")
         
         display_df = st.session_state.results.copy()
@@ -495,15 +501,31 @@ def main():
             'momentum_signal': 'Momentum', 'ema_trend': 'EMA Trend', 'overall_signal': 'Overall Signal'
         })
         
-        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+        def color_signal(val):
+            color = ''
+            if 'STRONG_BUY' in val: color = '#28a745'
+            elif 'BUY' in val: color = '#5cb85c'
+            elif 'HOLD' in val: color = '#f0ad4e'
+            elif 'SELL' in val: color = '#d9534f'
+            elif 'STRONG_SELL' in val: color = '#c0392b'
+            return f'color: {color}; font-weight: bold;'
+
+        styled_df_html = styled_df.to_html(escape=False, classes='stTable')
         
-        # Display the Buffett commentary for the selected stock
+        # Apply CSS classes for coloring
+        styled_df_html = styled_df_html.replace('<td>STRONG_BUY</td>', '<td style="color:#28a745; font-weight:bold;">STRONG_BUY</td>')
+        styled_df_html = styled_df_html.replace('<td>BUY</td>', '<td style="color:#5cb85c; font-weight:bold;">BUY</td>')
+        styled_df_html = styled_df_html.replace('<td>HOLD</td>', '<td style="color:#f0ad4e; font-weight:bold;">HOLD</td>')
+        styled_df_html = styled_df_html.replace('<td>SELL</td>', '<td style="color:#d9534f; font-weight:bold;">SELL</td>')
+        styled_df_html = styled_df_html.replace('<td>STRONG_SELL</td>', '<td style="color:#c0392b; font-weight:bold;">STRONG_SELL</td>')
+
+        st.markdown(styled_df_html, unsafe_allow_html=True)
+        
         if st.session_state.selected_ticker:
             selected_stock_data = st.session_state.results[st.session_state.results['ticker'] == st.session_state.selected_ticker].iloc[0]
-            st.subheader(f"🗣️ Warren Buffett's Take on {selected_stock_data['name']}")
+            st.subheader(f"🗣️ Buffett's Perspective on {selected_stock_data['name']}")
             st.info(selected_stock_data['buffett_commentary'])
         
-        # Detailed Chart View
         if st.session_state.selected_ticker:
             st.subheader(f"Detailed Analysis for {st.session_state.selected_ticker}")
             ticker_data = st.session_state.screener.stock_data.get(st.session_state.selected_ticker)
@@ -512,102 +534,65 @@ def main():
                 
                 fig = make_subplots(rows=3, cols=1, shared_xaxes=True, 
                                     vertical_spacing=0.1, 
-                                    row_heights=[0.5, 0.25, 0.25])
+                                    row_heights=[0.5, 0.25, 0.25],
+                                    subplot_titles=(f"Price & Moving Averages for {selected_stock_data['name']}", "Relative Strength Index (RSI)", "Moving Average Convergence Divergence (MACD)"))
 
-                # Price and EMA Chart
-                fig.add_trace(go.Candlestick(x=price_data.index,
-                                             open=price_data['Open'],
-                                             high=price_data['High'],
-                                             low=price_data['Low'],
-                                             close=price_data['Close'],
-                                             name='Price'),
-                              row=1, col=1)
-                fig.add_trace(go.Scatter(x=price_data.index, y=price_data['EMA_20'], name='EMA 20', line=dict(color='orange', width=2)), row=1, col=1)
-                fig.add_trace(go.Scatter(x=price_data.index, y=price_data['EMA_50'], name='EMA 50', line=dict(color='blue', width=2)), row=1, col=1)
+                fig.add_trace(go.Candlestick(x=price_data.index, open=price_data['Open'], high=price_data['High'], low=price_data['Low'], close=price_data['Close'], name='Price'), row=1, col=1)
+                fig.add_trace(go.Scatter(x=price_data.index, y=price_data['EMA_20'], name='EMA 20', line=dict(color='#f2a600', width=2)), row=1, col=1)
+                fig.add_trace(go.Scatter(x=price_data.index, y=price_data['EMA_50'], name='EMA 50', line=dict(color='#1e90ff', width=2)), row=1, col=1)
 
-                # RSI Chart
-                fig.add_trace(go.Scatter(x=price_data.index, y=price_data['RSI'], name='RSI', line=dict(color='purple')), row=2, col=1)
-                fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
-                fig.add_hline(y=30, line_dash="dash", line_color="green", row=2, col=1)
+                fig.add_trace(go.Scatter(x=price_data.index, y=price_data['RSI'], name='RSI', line=dict(color='#8a2be2')), row=2, col=1)
+                fig.add_hline(y=70, line_dash="dash", line_color="#d9534f", row=2, col=1)
+                fig.add_hline(y=30, line_dash="dash", line_color="#5cb85c", row=2, col=1)
 
-                # MACD Chart
-                colors = ['green' if val >= 0 else 'red' for val in price_data['MACD_Hist']]
+                colors = ['#28a745' if val >= 0 else '#d9534f' for val in price_data['MACD_Hist']]
                 fig.add_trace(go.Bar(x=price_data.index, y=price_data['MACD_Hist'], name='MACD Hist', marker_color=colors), row=3, col=1)
-                fig.add_trace(go.Scatter(x=price_data.index, y=price_data['MACD'], name='MACD', line=dict(color='black', width=1)), row=3, col=1)
-                fig.add_trace(go.Scatter(x=price_data.index, y=price_data['MACD_Signal'], name='Signal', line=dict(color='gray', width=1)), row=3, col=1)
+                fig.add_trace(go.Scatter(x=price_data.index, y=price_data['MACD'], name='MACD', line=dict(color='white', width=1)), row=3, col=1)
+                fig.add_trace(go.Scatter(x=price_data.index, y=price_data['MACD_Signal'], name='Signal', line=dict(color='#808080', width=1)), row=3, col=1)
 
-                fig.update_layout(height=800, title_text=f"{ticker_data['info']['name']} ({st.session_state.selected_ticker}) Technical Chart",
-                                  xaxis_rangeslider_visible=False)
-                fig.update_yaxes(title_text="Price", row=1, col=1)
-                fig.update_yaxes(title_text="RSI", range=[0, 100], row=2, col=1)
-                fig.update_yaxes(title_text="MACD", row=3, col=1)
+                fig.update_layout(height=800, template="plotly_dark", xaxis_rangeslider_visible=False,
+                                  title_font=dict(size=24, color='#4a90e2'),
+                                  paper_bgcolor="#1f2430", plot_bgcolor="#1f2430",
+                                  font=dict(color="#d0d0d0"))
                 st.plotly_chart(fig, use_container_width=True)
             else:
                 st.warning("⚠️ No detailed data found for this ticker. Please try fetching data again.")
         
-        # Visualizations
         st.header("📈 Analysis Dashboard")
         
         tab1, tab2, tab3 = st.tabs(["📊 Score Distribution", "🏭 Sector Analysis", "📈 Technical Signals"])
         
         with tab1:
             col1, col2 = st.columns(2)
-            
             with col1:
-                # Score distribution
-                fig_hist = go.Figure(data=[
-                    go.Histogram(x=st.session_state.results['magic_score'], nbinsx=15, 
-                                 marker_color='lightblue', opacity=0.7)
-                ])
-                fig_hist.update_layout(title="Magic Formula Score Distribution",
-                                       xaxis_title="Magic Formula Score", yaxis_title="Number of Stocks")
+                fig_hist = go.Figure(data=[go.Histogram(x=st.session_state.results['magic_score'], nbinsx=15, marker_color='#4a90e2', opacity=0.8)])
+                fig_hist.update_layout(title="Magic Formula Score Distribution", xaxis_title="Magic Formula Score", yaxis_title="Number of Stocks", template="plotly_dark", paper_bgcolor="#1f2430", plot_bgcolor="#1f2430")
                 st.plotly_chart(fig_hist, use_container_width=True)
-            
             with col2:
-                # Top 10 stocks
                 top_10 = st.session_state.results.head(10)
-                fig_bar = go.Figure(data=[
-                    go.Bar(y=[name[:20] + "..." if len(name) > 20 else name for name in top_10['name']],
-                           x=top_10['magic_score'], orientation='h', marker_color='gold', opacity=0.7)
-                ])
-                fig_bar.update_layout(title="Top 10 Stocks by Magic Score", xaxis_title="Magic Formula Score")
+                fig_bar = go.Figure(data=[go.Bar(y=[name[:20] + "..." if len(name) > 20 else name for name in top_10['name']], x=top_10['magic_score'], orientation='h', marker_color='#f2a600', opacity=0.8)])
+                fig_bar.update_layout(title="Top 10 Stocks by Magic Score", xaxis_title="Magic Formula Score", template="plotly_dark", paper_bgcolor="#1f2430", plot_bgcolor="#1f2430")
                 st.plotly_chart(fig_bar, use_container_width=True)
         
         with tab2:
             col1, col2 = st.columns(2)
-            
             with col1:
-                # Sector distribution
                 sector_counts = st.session_state.results['sector'].value_counts()
-                fig_pie = go.Figure(data=[go.Pie(labels=sector_counts.index, values=sector_counts.values, hole=0.3)])
-                fig_pie.update_layout(title="Sector Distribution")
+                fig_pie = go.Figure(data=[go.Pie(labels=sector_counts.index, values=sector_counts.values, hole=0.4, marker_colors=['#f2a600', '#1e90ff', '#8a2be2', '#5cb85c', '#d9534f', '#6a89c9'])])
+                fig_pie.update_layout(title="Sector Distribution", template="plotly_dark", paper_bgcolor="#1f2430", plot_bgcolor="#1f2430")
                 st.plotly_chart(fig_pie, use_container_width=True)
-            
             with col2:
-                # RSI vs Magic Score
-                fig_scatter = go.Figure(data=[
-                    go.Scatter(x=st.session_state.results['rsi'], y=st.session_state.results['magic_score'],
-                               mode='markers', marker=dict(size=8, color=st.session_state.results['current_price'],
-                               colorscale='Viridis', showscale=True), text=st.session_state.results['name'])
-                ])
-                fig_scatter.update_layout(title="RSI vs Magic Formula Score", 
-                                          xaxis_title="RSI", yaxis_title="Magic Formula Score")
+                fig_scatter = go.Figure(data=[go.Scatter(x=st.session_state.results['rsi'], y=st.session_state.results['magic_score'], mode='markers', marker=dict(size=10, color=st.session_state.results['current_price'], colorscale='Viridis', showscale=True), text=st.session_state.results['name'])])
+                fig_scatter.update_layout(title="RSI vs Magic Formula Score", xaxis_title="RSI", yaxis_title="Magic Formula Score", template="plotly_dark", paper_bgcolor="#1f2430", plot_bgcolor="#1f2430")
                 st.plotly_chart(fig_scatter, use_container_width=True)
         
         with tab3:
-            # Signal distribution
             signal_counts = st.session_state.results['overall_signal'].value_counts()
-            colors = ['green' if 'BUY' in signal else 'red' if 'SELL' in signal else 'orange' 
-                     for signal in signal_counts.index]
-            
-            fig_signals = go.Figure(data=[
-                go.Bar(x=signal_counts.index, y=signal_counts.values, marker_color=colors, opacity=0.7)
-            ])
-            fig_signals.update_layout(title="Overall Signal Distribution", 
-                                      xaxis_title="Signal Type", yaxis_title="Number of Stocks")
+            colors = ['#28a745' if 'BUY' in signal else '#d9534f' if 'SELL' in signal else '#f0ad4e' for signal in signal_counts.index]
+            fig_signals = go.Figure(data=[go.Bar(x=signal_counts.index, y=signal_counts.values, marker_color=colors, opacity=0.8)])
+            fig_signals.update_layout(title="Overall Signal Distribution", xaxis_title="Signal Type", yaxis_title="Number of Stocks", template="plotly_dark", paper_bgcolor="#1f2430", plot_bgcolor="#1f2430")
             st.plotly_chart(fig_signals, use_container_width=True)
         
-        # Export
         st.header("💾 Export Results")
         csv = st.session_state.results.to_csv(index=False)
         st.download_button(
@@ -618,54 +603,49 @@ def main():
         )
     
     else:
-        # Welcome screen
         st.markdown("""
-        ## 🚀 Welcome to Magic Formula Stock Screener!
-        
-        This tool combines **Joel Greenblatt's Magic Formula** with **Technical Analysis** to identify undervalued stocks in the Indian market.
-        
-        ### 🎯 How it works:
-        1. **Fetch Data**: Click the button in the sidebar to download market data
-        2. **Set Parameters**: Adjust market cap and stock count filters
-        3. **Run Screening**: Let the Magic Formula find opportunities
-        4. **Analyze Results**: Explore charts and technical indicators
-        
-        ### 📊 Features:
-        - **Magic Formula Rankings** (Return on Capital + Earnings Yield)
-        - **Technical Analysis** (RSI, MACD, EMA trends)
-        - **Trading Signals** for investment decisions
-        - **Sector Analysis** for diversification
-        - **Exportable Results** for further analysis
-        
-        ---
-        
-        **Ready to start?** Click **"🚀 Fetch Fresh Data"** in the sidebar! 📈
-        """)
+        <div style="background-color: #1f2430; padding: 25px; border-radius: 10px; border: 1px solid #4a69bd;">
+            <h2 style="color: #b0c4de;">🚀 Welcome to the Executive Investment Dashboard!</h2>
+            <p style="color: #d0d0d0;">
+                This powerful tool is designed to identify undervalued Indian stocks using a robust blend of
+                fundamental and technical analysis. Inspired by the principles of legendary investors,
+                it provides clear, data-driven insights to inform your investment decisions.
+            </p>
+            <h3 style="color: #4a90e2; margin-top: 20px;">Your Roadmap:</h3>
+            <ol style="color: #d0d0d0;">
+                <li><b>Fetch Data:</b> A single click in the sidebar pulls the latest market data.</li>
+                <li><b>Define Strategy:</b> Use the filters to set your investment criteria.</li>
+                <li><b>Execute Screening:</b> The system ranks stocks based on proven metrics.</li>
+                <li><b>Deep Dive:</b> Explore detailed charts and insights for each top-performing stock.</li>
+            </ol>
+            <h3 style="color: #4a90e2; margin-top: 20px;">Core Features:</h3>
+            <ul style="color: #d0d0d0;">
+                <li><b>Value-Driven Ranking:</b> The Magic Formula ranks stocks on Return on Capital and Earnings Yield.</li>
+                <li><b>Strategic Insights:</b> Built-in technical indicators and simple, plain-language commentary.</li>
+                <li><b>Dynamic Visualizations:</b> Professional-grade charts for quick, informed analysis.</li>
+            </ul>
+            <p style="color: #d0d0d0; margin-top: 30px; text-align: center;">
+                <b>Ready to start?</b> Click <b>"🚀 Fetch Fresh Data"</b> in the sidebar! 📈
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
         col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.info("🏢 **35** Major Stocks")
-        with col2:
-            st.info("📊 **9** Technical Indicators")
-        with col3:
-            st.info("🎯 **Magic Formula** Scoring")
-        with col4:
-            st.info("⚡ **Real-time** Data")
+        with col1: st.info(f"🏢 **{len(st.session_state.screener.indian_stocks)}** Major Stocks")
+        with col2: st.info("📊 **9** Technical Indicators")
+        with col3: st.info("🎯 **Magic Formula** Scoring")
+        with col4: st.info("⚡ **Real-time** Data")
 
-    # -------------------------------------------------------------------------
-    # ADDED DISCLAIMER
-    # -------------------------------------------------------------------------
     st.markdown("---")
     st.markdown("""
-    <div style="background-color:#2e2e3e; padding:15px; border-radius:8px; margin-top:30px; border: 1px solid #4a90e2;">
+    <div style="background-color:#1e2430; padding:15px; border-radius:8px; margin-top:30px; border: 1px solid #4a90e2;">
         <p style="font-size:14px; color:#a0a0a0; text-align:center; margin:0;">
             <b>Disclaimer:</b> This tool is for educational and informational purposes only and does not constitute financial or investment advice.
-            Signals and data are generated based on publicly available APIs and may contain inaccuracies or be delayed.
+            The commentary and signals are illustrative and should not be used as a basis for investment decisions.
             Always conduct your own due diligence and consult with a qualified financial professional before making any investment decisions.
         </p>
     </div>
     """, unsafe_allow_html=True)
-    # -------------------------------------------------------------------------
 
 if __name__ == "__main__":
     main()
