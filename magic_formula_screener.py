@@ -228,6 +228,7 @@ class MagicFormulaScreener:
             rsi_signal = self._get_rsi_signal(current_rsi)
             momentum_signal = self._get_momentum_signal(current_momentum)
             overall_signal = self._get_overall_signal(current_rsi, current_momentum, ema_20, ema_50)
+            pb_signal = self._get_pb_signal(pb_ratio)
 
             commentary = self._generate_buffett_commentary(magic_score, pb_ratio, ema_trend)
             
@@ -248,6 +249,7 @@ class MagicFormulaScreener:
                 "rsi_signal": rsi_signal,
                 "momentum_signal": momentum_signal,
                 "overall_signal": overall_signal,
+                "pb_signal": pb_signal, # New P/B Signal
                 "buffett_commentary": commentary
             }
             
@@ -295,7 +297,16 @@ class MagicFormulaScreener:
         elif score <= -2: return "STRONG_SELL"
         elif score <= -1: return "SELL"
         else: return "HOLD"
-    
+
+    def _get_pb_signal(self, pb_ratio: float) -> str:
+        """Categorize a stock based on its P/B ratio."""
+        if pb_ratio < 1.5:
+            return "Undervalued"
+        elif pb_ratio > 4.0:
+            return "Overvalued"
+        else:
+            return "Correctly Valued"
+
     def screen_stocks(self, min_market_cap: float = 1000, top_n: int = 20) -> pd.DataFrame:
         """Screen stocks using Magic Formula"""
         results = []
@@ -374,6 +385,10 @@ def main():
         .signal-hold { color: #f0ad4e; }
         .signal-sell { color: #d9534f; }
         .signal-strong-sell { color: #c0392b; font-weight: bold; }
+
+        .pb-undervalued { color: #5cb85c; font-weight: bold; }
+        .pb-correctly_valued { color: #f0ad4e; font-weight: bold; }
+        .pb-overvalued { color: #d9534f; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
     
@@ -485,12 +500,12 @@ def main():
         
         display_columns = [
             'Rank', 'name', 'ticker', 'Price (₹)', 'Magic Score', 'P/B Ratio',
-            'rsi_signal', 'momentum_signal', 'ema_trend', 'overall_signal'
+            'pb_signal', 'overall_signal'
         ]
         
         styled_df = display_df[display_columns].rename(columns={
-            'name': 'Company', 'ticker': 'Ticker', 'rsi_signal': 'RSI Signal',
-            'momentum_signal': 'Momentum', 'ema_trend': 'EMA Trend', 'overall_signal': 'Overall Signal'
+            'name': 'Company', 'ticker': 'Ticker', 'pb_signal': 'P/B Valuation',
+            'overall_signal': 'Overall Signal'
         })
         
         styled_df_html = styled_df.to_html(escape=False, classes='stTable')
@@ -500,6 +515,10 @@ def main():
         styled_df_html = styled_df_html.replace('<td>HOLD</td>', '<td style="color:#f0ad4e; font-weight:bold;">HOLD</td>')
         styled_df_html = styled_df_html.replace('<td>SELL</td>', '<td style="color:#d9534f; font-weight:bold;">SELL</td>')
         styled_df_html = styled_df_html.replace('<td>STRONG_SELL</td>', '<td style="color:#c0392b; font-weight:bold;">STRONG_SELL</td>')
+        styled_df_html = styled_df_html.replace('<td>Undervalued</td>', '<td style="color:#5cb85c; font-weight:bold;">Undervalued</td>')
+        styled_df_html = styled_df_html.replace('<td>Correctly Valued</td>', '<td style="color:#f0ad4e; font-weight:bold;">Correctly Valued</td>')
+        styled_df_html = styled_df_html.replace('<td>Overvalued</td>', '<td style="color:#d9534f; font-weight:bold;">Overvalued</td>')
+        
         st.markdown(styled_df_html, unsafe_allow_html=True)
         
         # --- Start of the corrected section for commentary and charts ---
@@ -510,7 +529,7 @@ def main():
             if not selected_stock_data_df.empty:
                 selected_stock_data = selected_stock_data_df.iloc[0]
                 
-                # Use st.markdown to display the Overall Signal with a color based on the signal type
+                # Use st.markdown to display the Overall Signal and P/B Valuation
                 signal_color_map = {
                     "STRONG_BUY": "#28a745",
                     "BUY": "#5cb85c",
@@ -519,11 +538,26 @@ def main():
                     "STRONG_SELL": "#c0392b"
                 }
                 
+                pb_color_map = {
+                    "Undervalued": "#5cb85c",
+                    "Correctly Valued": "#f0ad4e",
+                    "Overvalued": "#d9534f"
+                }
+
                 overall_signal = selected_stock_data.get('overall_signal', 'N/A')
+                pb_signal = selected_stock_data.get('pb_signal', 'N/A')
+
                 signal_color = signal_color_map.get(overall_signal, "#ffffff")
+                pb_color = pb_color_map.get(pb_signal, "#ffffff")
                 
                 st.subheader(f"Detailed Analysis for {selected_stock_data['name']}")
-                st.markdown(f"### Overall Signal: <span style='color: {signal_color};'>**{overall_signal}**</span>", unsafe_allow_html=True)
+                
+                cols = st.columns(2)
+                with cols[0]:
+                    st.markdown(f"### Overall Signal: <span style='color: {signal_color};'>**{overall_signal}**</span>", unsafe_allow_html=True)
+                with cols[1]:
+                    st.markdown(f"### P/B Valuation: <span style='color: {pb_color};'>**{pb_signal}**</span>", unsafe_allow_html=True)
+
 
                 # Now display the Buffett commentary
                 st.subheader("🗣️ Buffett's Perspective")
