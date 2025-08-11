@@ -613,7 +613,7 @@ def main():
             font-size: 1.1rem; /* Slightly larger for text */
             color: #2c3e50; /* Darker, more prominent color for the label text */
             font-weight: bold; /* Make the label text bold */
-            margin-bottom: 8px; /* Add more space below label */
+            margin-bottom: 8px; /* Add space below label */
         }
         .stMetric > div:nth-child(2) { /* Value (e.g., "75.23") */
             font-size: 2.2rem; /* Larger font size for the number */
@@ -737,7 +737,8 @@ def main():
             display_df['Magic Score'] = "N/A"
             display_df['RoC (%)'] = "N/A"
             display_df['Earnings Yield (%)'] = "N/A"
-            display_columns = ['Rank', 'name', 'ticker', 'Price (₹)', 'Technical Signal']
+            # FIX: Use 'overall_signal' here, then rename after selection
+            display_columns = ['Rank', 'name', 'ticker', 'Price (₹)', 'overall_signal']
             rename_cols = {'name': 'Index Name', 'ticker': 'Ticker', 'overall_signal': 'Technical Signal'}
         else:
             display_df['Market Cap (Cr)'] = display_df['market_cap'].apply(lambda x: f"₹{x:,.0f}" if pd.notna(x) else "N/A")
@@ -797,6 +798,7 @@ def main():
                     selected_analysis = selected_analysis_from_results.iloc[0].to_dict()
                 else:
                     # If not in screened results (e.g., if user directly selected an index or a non-screened stock), recalculate
+                    # This will generate a full analysis for stocks or a minimal one for indices
                     selected_analysis = st.session_state.screener._calculate_analysis_metrics(selected_ticker, selected_stock_data)
                 
                 if selected_analysis: # This check is now safe for Dict (truthy if not empty) or None
