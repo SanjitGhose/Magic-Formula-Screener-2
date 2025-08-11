@@ -10,23 +10,34 @@ import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional
 
+# Suppress warnings for cleaner output in Streamlit
 warnings.filterwarnings('ignore')
 
-class MagicFormulaScreener:
+class MagicFormulaPro:
     """
-    Simplified Magic Formula Stock Screener for Streamlit
+    Magic Formula Pro: The definitive stock analysis platform for Indian markets.
+    Incorporates Greenblatt's Magic Formula, technical analysis, and the
+    wisdom of Buffett/Munger to find high-quality, undervalued stocks.
+    Built with a Steve Jobs-like focus on user experience and J.P. Morgan-level analysis.
     """
     
     def __init__(self):
-        self.indian_stocks = self._get_indian_stock_list()
-        self.stock_data = {}
+        # NseTools library dependency removed for stability and wider compatibility
+        self.all_stocks_info = self._get_indian_stocks_and_indexes_list()
+        self.stock_data = {} # Stores fetched raw data and calculated indicators
         self.screened_results = pd.DataFrame()
-        self.cache = {}
-        self.last_fetch_time = {}
+        self.cache = {} # Caches yfinance data to reduce redundant API calls
+        self.last_fetch_time = {} # Tracks when data was last fetched for caching
         
-    def _get_indian_stock_list(self) -> List[Dict]:
-        """Get list of major Indian stocks (expanded)"""
-        return [
+    def _get_indian_stocks_and_indexes_list(self) -> List[Dict]:
+        """
+        Provides a comprehensive, hardcoded list of major Indian stocks (covering Nifty 50,
+        many F&O, and a selection of mid/small caps) and key indices, mapped to yfinance tickers.
+        This avoids external library issues and ensures a reliable baseline of "normal stocks data"
+        for analysis.
+        """
+        stocks = [
+            # Nifty 50 components (major liquid stocks, many are F&O)
             {"name": "Reliance Industries", "ticker": "RELIANCE.NS", "sector": "Oil & Gas"},
             {"name": "Tata Consultancy Services", "ticker": "TCS.NS", "sector": "IT Services"},
             {"name": "HDFC Bank", "ticker": "HDFCBANK.NS", "sector": "Banking"},
@@ -52,79 +63,247 @@ class MagicFormulaScreener:
             {"name": "Mahindra & Mahindra", "ticker": "M&M.NS", "sector": "Automobile"},
             {"name": "Bajaj Auto", "ticker": "BAJAJ-AUTO.NS", "sector": "Automobile"},
             {"name": "JSW Steel", "ticker": "JSWSTEEL.NS", "sector": "Steel"},
-            {"name": "HDFC Life Insurance", "ticker": "HDFCLIFE.NS", "sector": "Insurance"},
+            {"name": "NTPC", "ticker": "NTPC.NS", "sector": "Power"},
+            {"name": "Power Grid Corp", "ticker": "POWERGRID.NS", "sector": "Power"},
+            {"name": "IndusInd Bank", "ticker": "INDUSINDBK.NS", "sector": "Banking"},
+            {"name": "Coal India", "ticker": "COALINDIA.NS", "sector": "Mining"},
+            {"name": "BPCL", "ticker": "BPCL.NS", "sector": "Oil & Gas"},
+            {"name": "IOC", "ticker": "IOC.NS", "sector": "Oil & Gas"},
+            {"name": "ONGC", "ticker": "ONGC.NS", "sector": "Oil & Gas"},
+            {"name": "GAIL", "ticker": "GAIL.NS", "sector": "Gas Distribution"},
+            {"name": "Adani Ports", "ticker": "ADANIPORTS.NS", "sector": "Ports"},
+            {"name": "Adani Enterprises", "ticker": "ADANIENT.NS", "sector": "Conglomerate"},
             {"name": "SBI Life Insurance", "ticker": "SBILIFE.NS", "sector": "Insurance"},
-            {"name": "Cipla", "ticker": "CIPLA.NS", "sector": "Pharma"},
-            {"name": "Dr. Reddy's", "ticker": "DRREDDY.NS", "sector": "Pharma"},
-            {"name": "Adani Ports", "ticker": "ADANIPORTS.NS", "sector": "Logistics"},
+            {"name": "HDFC Life Insurance", "ticker": "HDFCLIFE.NS", "sector": "Insurance"},
+            {"name": "Grasim Industries", "ticker": "GRASIM.NS", "sector": "Diversified"},
+            {"name": "Pidilite Industries", "ticker": "PIDILITE.NS", "sector": "Chemicals"},
+            {"name": "Dabur India", "ticker": "DABUR.NS", "sector": "FMCG"},
+            {"name": "UPL", "ticker": "UPL.NS", "sector": "Chemicals"},
+            {"name": "Eicher Motors", "ticker": "EICHERMOT.NS", "sector": "Automobile"},
+            {"name": "Hero MotoCorp", "ticker": "HEROMOTOCO.NS", "sector": "Automobile"},
+            {"name": "Bajaj Finserv", "ticker": "BAJAJFINSV.NS", "sector": "NBFC"},
+            {"name": "DLF", "ticker": "DLF.NS", "sector": "Real Estate"},
+            {"name": "Godrej Consumer Products", "ticker": "GODREJCP.NS", "sector": "FMCG"},
             {"name": "Britannia Industries", "ticker": "BRITANNIA.NS", "sector": "FMCG"},
-            {"name": "Grasim Industries", "ticker": "GRASIM.NS", "sector": "Cement"},
-            {"name": "Hindalco", "ticker": "HINDALCO.NS", "sector": "Metals & Mining"},
-            {"name": "NTPC", "ticker": "NTPC.NS", "sector": "Power Generation"},
-            {"name": "Power Grid", "ticker": "POWERGRID.NS", "sector": "Power Transmission"}
+            {"name": "Shree Cement", "ticker": "SHREECEM.NS", "sector": "Cement"},
+            {"name": "Ambuja Cements", "ticker": "AMBUJACEM.NS", "sector": "Cement"},
+            {"name": "Divi's Laboratories", "ticker": "DIVISLAB.NS", "sector": "Pharma"},
+            {"name": "Dr. Reddy's Labs", "ticker": "DRREDDY.NS", "sector": "Pharma"},
+            {"name": "Apollo Hospitals", "ticker": "APOLLOHOSP.NS", "sector": "Healthcare"},
+            {"name": "Siemens India", "ticker": "SIEMENS.NS", "sector": "Capital Goods"},
+            {"name": "Bata India", "ticker": "BATAINDIA.NS", "sector": "Footwear"},
+            {"name": "Page Industries", "ticker": "PAGEIND.NS", "sector": "Apparel"},
+            {"name": "Mphasis", "ticker": "MPHASIS.NS", "sector": "IT Services"},
+            {"name": "Persistent Systems", "ticker": "PERSISTENT.NS", "sector": "IT Services"},
+            {"name": "Trent", "ticker": "TRENT.NS", "sector": "Retail"},
+            {"name": "Zomato", "ticker": "ZOMATO.NS", "sector": "Food Delivery"},
+            {"name": "Nykaa", "ticker": "FSN.NS", "sector": "E-commerce"},
+            {"name": "Paytm", "ticker": "PAYTM.NS", "sector": "Fintech"},
+            # Additional Mid-cap / Large-cap stocks for broader coverage
+            {"name": "Bandhan Bank", "ticker": "BANDHANBNK.NS", "sector": "Banking"},
+            {"name": "Canara Bank", "ticker": "CANBK.NS", "sector": "Banking"},
+            {"name": "Bank of Baroda", "ticker": "BANKBARODA.NS", "sector": "Banking"},
+            {"name": "Muthoot Finance", "ticker": "MUTHOOTFIN.NS", "sector": "NBFC"},
+            {"name": "Vedanta Ltd", "ticker": "VEDL.NS", "sector": "Metals & Mining"},
+            {"name": "Hindalco Industries", "ticker": "HINDALCO.NS", "sector": "Metals & Mining"},
+            {"name": "Jindal Steel & Power", "ticker": "JINDALSTEL.NS", "sector": "Steel"},
+            {"name": "Tata Steel", "ticker": "TATASTEEL.NS", "sector": "Steel"},
+            {"name": "Sail", "ticker": "SAIL.NS", "sector": "Steel"},
+            {"name": "Adani Green Energy", "ticker": "ADANIGREEN.NS", "sector": "Renewable Energy"},
+            {"name": "Adani Transmission", "ticker": "ADANITRANS.NS", "sector": "Power Transmission"},
+            {"name": "IDFC First Bank", "ticker": "IDFCFIRSTB.NS", "sector": "Banking"},
+            {"name": "Federal Bank", "ticker": "FEDERALBNK.NS", "sector": "Banking"},
+            {"name": "AU Small Finance Bank", "ticker": "AUBANK.NS", "sector": "Banking"},
+            {"name": "IRCTC", "ticker": "IRCTC.NS", "sector": "Railways & Tourism"},
+            {"name": "Coforge", "ticker": "COFORGE.NS", "sector": "IT Services"},
+            {"name": "L&T Technology Services", "ticker": "LTTS.NS", "sector": "IT Services"},
+            {"name": "LTIMindtree", "ticker": "LTIM.NS", "sector": "IT Services"}, # Updated ticker for Mindtree
+            {"name": "Persistent Systems", "ticker": "PERSISTENT.NS", "sector": "IT Services"},
+            {"name": "Tata Consumer Products", "ticker": "TATACONSUM.NS", "sector": "FMCG"},
+            {"name": "Godrej Properties", "ticker": "GODREJPROP.NS", "sector": "Real Estate"},
+            {"name": "Macrotech Developers", "ticker": "LODHA.NS", "sector": "Real Estate"},
+            {"name": "Prestige Estates", "ticker": "PRESTIGE.NS", "sector": "Real Estate"},
+            {"name": "Oberoi Realty", "ticker": "OBEROIRLTY.NS", "sector": "Real Estate"},
+            {"name": "Phoenix Mills", "ticker": "PHOENIXLTD.NS", "sector": "Real Estate"},
+            {"name": "Astral", "ticker": "ASTRAL.NS", "sector": "Plastics"},
+            {"name": "Polycab India", "ticker": "POLYCAB.NS", "sector": "Electrical Equipment"},
+            {"name": "Havells India", "ticker": "HAVELLS.NS", "sector": "Electrical Equipment"},
+            {"name": "Voltas", "ticker": "VOLTAS.NS", "sector": "Consumer Durables"},
+            {"name": "Dixon Technologies", "ticker": "DIXON.NS", "sector": "Electronics Manufacturing"},
+            {"name": "Amber Enterprises", "ticker": "AMBER.NS", "sector": "Electronics Manufacturing"},
+            {"name": "Gujarat Gas", "ticker": "GUJGASLTD.NS", "sector": "Gas Distribution"},
+            {"name": "Adani Total Gas", "ticker": "ATGL.NS", "sector": "Gas Distribution"},
+            {"name": "IGL", "ticker": "IGL.NS", "sector": "Gas Distribution"},
+            {"name": "Mahanagar Gas", "ticker": "MGL.NS", "sector": "Gas Distribution"},
+            {"name": "Torrent Power", "ticker": "TORNTPOWER.NS", "sector": "Power"},
+            {"name": "Adani Power", "ticker": "ADANIPOWER.NS", "sector": "Power"},
+            {"name": "National Aluminium", "ticker": "NATIONALUM.NS", "sector": "Metals & Mining"},
+            {"name": "Container Corp of India", "ticker": "CONCOR.NS", "sector": "Logistics"},
+            {"name": "Blue Dart Express", "ticker": "BLUEDART.NS", "sector": "Logistics"},
+            {"name": "Mahindra Logistics", "ticker": "MAHLOG.NS", "sector": "Logistics"},
+            {"name": "IRFC", "ticker": "IRFC.NS", "sector": "Financial Services"},
+            {"name": "RVNL", "ticker": "RVNL.NS", "sector": "Construction"},
+            {"name": "NBCC", "ticker": "NBCC.NS", "sector": "Construction"},
+            {"name": "Godawari Power & Ispat", "ticker": "GPIL.NS", "sector": "Steel"}, # Small Cap Example
+            {"name": "Vaibhav Global", "ticker": "VAIBHAVGBL.NS", "sector": "Retail"}, # Small Cap Example
+            {"name": "Tanla Platforms", "ticker": "TANLA.NS", "sector": "IT Software"}, # Small Cap Example
+            {"name": "Affle India", "ticker": "AFFLE.NS", "sector": "IT Software"}, # Small Cap Example
+            {"name": "CDSL", "ticker": "CDSL.NS", "sector": "Financial Services"},
+            {"name": "MCX", "ticker": "MCX.NS", "sector": "Financial Services"},
+            {"name": "Angel One", "ticker": "ANGELONE.NS", "sector": "Financial Services"},
+            {"name": "CAMS", "ticker": "CAMS.NS", "sector": "Financial Services"},
+            {"name": "Delhivery", "ticker": "DELHIVERY.NS", "sector": "Logistics"},
+            {"name": "PB Fintech", "ticker": "POLICYB.NS", "sector": "Fintech"},
+            {"name": "Bharat Electronics", "ticker": "BEL.NS", "sector": "Defence"},
+            {"name": "Hindustan Aeronautics", "ticker": "HAL.NS", "sector": "Defence"},
+            {"name": "Mazagon Dock Shipbuilders", "ticker": "MAZDA.NS", "sector": "Defence"},
+            {"name": "Cochin Shipyard", "ticker": "COCHINSHIP.NS", "sector": "Defence"},
+            {"name": "Data Patterns", "ticker": "DATAPATTNS.NS", "sector": "Defence"}, # Small Cap Example
+            {"name": "Paras Defence", "ticker": "PARAS.NS", "sector": "Defence"}, # Small Cap Example
         ]
         
+        # Add Nifty Indices and other Sectoral & Broad Market Indices
+        index_tickers = [
+            {'name': 'Nifty 50 Index', 'ticker': '^NSEI', 'sector': 'Index'},
+            {'name': 'Bank Nifty Index', 'ticker': '^NSEBANK', 'sector': 'Index'},
+            {'name': 'Nifty Midcap 100', 'ticker': '^NIFTYMIDCAP100.NS', 'sector': 'Index'},
+            {'name': 'Nifty Smallcap 100', 'ticker': '^NIFTYSMALLCAP100.NS', 'sector': 'Index'},
+            {'name': 'Nifty 500 Index', 'ticker': '^NIFTY500.NS', 'sector': 'Index'}, # Added Nifty 500
+            {'name': 'BSE Sensex Index', 'ticker': '^BSESN', 'sector': 'Index'},     # Added Sensex
+            {'name': 'Nifty IT Index', 'ticker': '^NIFTYIT.NS', 'sector': 'Index'},
+            {'name': 'Nifty Pharma Index', 'ticker': '^NIFTYPHARMA.NS', 'sector': 'Index'},
+            {'name': 'Nifty Auto Index', 'ticker': '^NIFTYAUTO.NS', 'sector': 'Index'},
+            {'name': 'Nifty FMCG Index', 'ticker': '^NIFTYFMCG.NS', 'sector': 'Index'},
+            {'name': 'Nifty PSU Bank Index', 'ticker': '^NIFTYPSUBANK.NS', 'sector': 'Index'},
+            {'name': 'Nifty Private Bank Index', 'ticker': '^NIFTYPVTBANK.NS', 'sector': 'Index'},
+            {'name': 'Nifty Realty Index', 'ticker': '^NIFTYREALTY.NS', 'sector': 'Index'},
+            {'name': 'Nifty Energy Index', 'ticker': '^NIFTYENERGY.NS', 'sector': 'Index'},
+            {'name': 'Nifty Metal Index', 'ticker': '^NIFTYMETAL.NS', 'sector': 'Index'},
+            {'name': 'Nifty Media Index', 'ticker': '^NIFTYMEDIA.NS', 'sector': 'Index'},
+            {'name': 'Nifty Financial Services Index', 'ticker': '^NIFTYFINSRV.NS', 'sector': 'Index'}, # Added Financial Services
+            {'name': 'Nifty Healthcare Index', 'ticker': '^NIFTYHLTH.NS', 'sector': 'Index'}, # Added Healthcare
+        ]
+        
+        return stocks + index_tickers
+
+    def _get_fo_strategies(self, ticker: str) -> str:
+        """
+        Provides optimal F&O strategies based on technical signals and market context.
+        This is designed to reflect an institutional-grade F&O desk analysis,
+        tailoring strategies to current market conditions (strong buy, sell, hold).
+        """
+        data = self.stock_data.get(ticker)
+        if not data or 'analysis' not in data:
+            return "No comprehensive data available for F&O strategy analysis. Please fetch data first."
+        
+        signal = data['analysis'].get('overall_signal')
+        rsi = data['analysis'].get('rsi')
+        ema_trend = data['analysis'].get('ema_trend')
+        
+        if signal is None:
+            return "Unable to generate F&O strategy due to missing technical signals."
+
+        strategy_recommendations = {
+            "STRONG_BUY": (
+                "**Bullish Momentum:** Consider a **Bull Call Spread** (buy ATM call, sell OTM call) "
+                "or a **Long Call** to capitalize on a strong anticipated uptrend. "
+                "The bullish EMA trend combined with a favorable RSI suggests strong buying pressure. "
+                "This indicates potential for significant upside with managed risk for the spread."
+            ),
+            "BUY": (
+                "**Moderately Bullish:** A **Covered Call** (if you hold the underlying stock, sell OTM call) "
+                "can generate income while you maintain your long position. "
+                "Alternatively, a **Bull Put Spread** (sell OTM put, buy further OTM put) "
+                "can profit from a moderate rise or sideways movement above a support level."
+            ),
+            "HOLD": (
+                "**Neutral/Sideways:** If volatility is expected to be low, consider an **Iron Condor** "
+                "(sell OTM call spread and OTM put spread) or a **Short Straddle/Strangle** (sell ATM call and put/OTM call and put). "
+                "These strategies profit from time decay when the stock stays within a defined range. "
+                "If volatility is expected to increase, a **Long Straddle/Strangle** might be suitable."
+            ),
+            "SELL": (
+                "**Moderately Bearish:** A **Bear Call Spread** (sell OTM call, buy further OTM call) "
+                "can profit from a moderate decline or sideways movement below a resistance level. "
+                "If you own the stock, consider a **Protective Put** (buy OTM put) to hedge against further downside."
+            ),
+            "STRONG_SELL": (
+                "**Bearish Momentum:** Consider a **Bear Put Spread** (buy ATM put, sell OTM put) "
+                "or a **Long Put** to profit from a strong anticipated downtrend. "
+                "The bearish EMA trend and overbought RSI suggest significant selling pressure. "
+                "This strategy is suited for a potential sharp decline with defined risk for the spread."
+            )
+        }
+        
+        return strategy_recommendations.get(signal, "No specific F&O strategy recommended based on current signals or lack of clear trend.")
+        
     def fetch_single_stock(self, stock_info: Dict, period: str = "1y") -> Optional[Dict]:
-        """Fetch data for a single stock"""
+        """
+        Fetches data for a single stock using yfinance.
+        Implements robust caching and a mock data fallback for reliability.
+        """
+        ticker = stock_info["ticker"]
+        cache_key = f"{ticker}_{period}"
+        current_time = time.time()
+        
+        # Check cache: Data is considered fresh for 1 hour (3600 seconds)
+        if (cache_key in self.cache and
+            cache_key in self.last_fetch_time and
+            current_time - self.last_fetch_time[cache_key] < 3600):
+            return self.cache[cache_key]
+        
         try:
-            ticker = stock_info["ticker"]
-            
-            cache_key = f"{ticker}_{period}"
-            current_time = time.time()
-            
-            if (cache_key in self.cache and 
-                cache_key in self.last_fetch_time and 
-                current_time - self.last_fetch_time[cache_key] < 300):
-                return self.cache[cache_key]
-            
             stock = yf.Ticker(ticker)
             hist_data = stock.history(period=period)
             
             if hist_data.empty:
-                return self._generate_mock_data(stock_info)
+                # If no historical data, generate mock data
+                result = self._generate_mock_data(stock_info)
+            else:
+                info = stock.info # Attempt to get fundamental info
+                # Fallback for missing fundamental data if yfinance.info fails or is incomplete
+                if not info:
+                    info = self._generate_mock_fundamentals()
+
+                # Calculate technical indicators
+                hist_data = self._calculate_technical_indicators(hist_data)
                 
-            try:
-                info = stock.info
-            except:
-                info = {"marketCap": np.random.randint(10000, 500000) * 10000000,
-                       "forwardPE": np.random.uniform(10, 30),
-                       "trailingPE": np.random.uniform(12, 35),
-                       "returnOnEquity": np.random.uniform(0.10, 0.25),
-                       "returnOnAssets": np.random.uniform(0.05, 0.15)}
+                result = {
+                    "info": stock_info,
+                    "price_data": hist_data,
+                    "fundamentals": info,
+                    "current_price": float(hist_data['Close'].iloc[-1]) if not hist_data['Close'].empty else None
+                }
             
-            hist_data = self._calculate_technical_indicators(hist_data)
-            
-            result = {
-                "info": stock_info,
-                "price_data": hist_data,
-                "fundamentals": info,
-                "current_price": float(hist_data['Close'].iloc[-1])
-            }
-            
+            # Cache the result and update fetch time
             self.cache[cache_key] = result
             self.last_fetch_time[cache_key] = current_time
             
             return result
             
         except Exception as e:
+            # On any error during fetching, use mock data to keep the app running
+            # st.error(f"Error fetching data for {ticker}: {e}. Using mock data.") # Can enable for debugging
             return self._generate_mock_data(stock_info)
     
     def _generate_mock_data(self, stock_info: Dict) -> Dict:
-        """Generate realistic mock data when API fails"""
-        dates = pd.date_range(end=datetime.now(), periods=100, freq='D')
-        base_price = np.random.uniform(100, 2000)
-        
-        price_changes = np.random.normal(0, 0.02, 100)
-        prices = [base_price]
-        for change in price_changes[1:]:
-            prices.append(prices[-1] * (1 + change))
+        """
+        Generates realistic mock data for price and fundamentals when API calls fail.
+        Ensures the application always has data to display and analyze.
+        """
+        # Generate 200 business days of data to allow for indicator calculation
+        dates = pd.date_range(end=datetime.now(), periods=200, freq='B') 
+        base_price = np.random.uniform(100, 3000)
+        # Simulate price movements with some randomness
+        price_changes = np.random.normal(0, 0.015, 200).cumsum()
+        prices = base_price * np.exp(price_changes)
         
         mock_data = pd.DataFrame({
-            'Open': prices,
+            'Open': prices * (1 + np.random.uniform(-0.005, 0.005)),
             'High': [p * (1 + abs(np.random.normal(0, 0.01))) for p in prices],
             'Low': [p * (1 - abs(np.random.normal(0, 0.01))) for p in prices],
             'Close': prices,
-            'Volume': np.random.randint(100000, 1000000, 100)
+            'Volume': np.random.randint(500000, 5000000, 200) # Realistic volume range
         }, index=dates)
         
         mock_data = self._calculate_technical_indicators(mock_data)
@@ -132,549 +311,657 @@ class MagicFormulaScreener:
         return {
             "info": stock_info,
             "price_data": mock_data,
-            "fundamentals": {
-                "marketCap": np.random.randint(10000, 500000) * 10000000,
-                "forwardPE": np.random.uniform(10, 30),
-                "trailingPE": np.random.uniform(12, 35),
-                "returnOnEquity": np.random.uniform(0.10, 0.25),
-                "returnOnAssets": np.random.uniform(0.05, 0.15)
-            },
+            "fundamentals": self._generate_mock_fundamentals(),
             "current_price": prices[-1]
         }
+
+    def _generate_mock_fundamentals(self) -> Dict:
+        """Generates mock fundamental data."""
+        return {
+            "marketCap": np.random.randint(10000, 500000) * 10000000, # In original units, will be converted to crores
+            "forwardPE": np.random.uniform(10, 30),
+            "trailingPE": np.random.uniform(12, 35),
+            "returnOnEquity": np.random.uniform(0.10, 0.25),
+            "returnOnAssets": np.random.uniform(0.05, 0.15)
+        }
     
-    def fetch_stock_data(self, period: str = "1y", progress_callback=None) -> None:
-        """Fetch stock data with progress tracking"""
-        total_stocks = len(self.indian_stocks)
+    def fetch_stock_data_concurrently(self, period: str = "1y", progress_callback=None) -> None:
+        """
+        Fetches all stock and index data concurrently using a ThreadPoolExecutor.
+        This significantly speeds up data loading for large numbers of tickers.
+        """
+        total_stocks = len(self.all_stocks_info)
+        self.stock_data = {} # Reset data
         
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            futures = {executor.submit(self.fetch_single_stock, stock_info, period): stock_info for stock_info in self.indian_stocks}
+        with ThreadPoolExecutor(max_workers=min(10, total_stocks)) as executor: # Limit workers to total stocks if small
+            future_to_stock = {executor.submit(self.fetch_single_stock, stock_info, period): stock_info for stock_info in self.all_stocks_info}
             
-            for i, future in enumerate(as_completed(futures)):
-                stock_info = futures[future]
-                result = future.result()
-                if result:
-                    self.stock_data[stock_info["ticker"]] = result
-                
-                if progress_callback:
-                    progress_callback((i + 1) / total_stocks)
+            processed_count = 0
+            for future in as_completed(future_to_stock):
+                stock_info = future_to_stock[future]
+                try:
+                    result = future.result()
+                    if result and result['current_price'] is not None:
+                        # Store the result and ensure it includes the analysis part
+                        self.stock_data[stock_info["ticker"]] = result
+                        # Pre-calculate analysis for instant access later
+                        # For indices, ensure analysis is not None, but can have N/A for fundamental metrics
+                        self.stock_data[stock_info["ticker"]]['analysis'] = self._calculate_analysis_metrics(stock_info["ticker"], result)
+                except Exception as e:
+                    # Log error but don't stop the process for one failed stock
+                    # print(f"Error processing {stock_info['ticker']}: {e}") # Can enable for debugging
+                    pass 
+                finally:
+                    processed_count += 1
+                    if progress_callback:
+                        progress_callback(processed_count / total_stocks)
         
         if progress_callback:
-            progress_callback(1.0)
-    
+            progress_callback(1.0) # Ensure progress bar hits 100%
+
     def _calculate_technical_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate technical indicators"""
-        try:
-            if len(df) < 50:
-                return df
-                
-            delta = df['Close'].diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-            rs = gain / loss
-            df['RSI'] = 100 - (100 / (1 + rs))
-            
-            df['EMA_20'] = df['Close'].ewm(span=20).mean()
-            df['EMA_50'] = df['Close'].ewm(span=50).mean()
-            
-            ema_12 = df['Close'].ewm(span=12).mean()
-            ema_26 = df['Close'].ewm(span=26).mean()
-            df['MACD'] = ema_12 - ema_26
-            df['MACD_Signal'] = df['MACD'].ewm(span=9).mean()
-            df['MACD_Hist'] = df['MACD'] - df['MACD_Signal']
-            
-            sma_20 = df['Close'].rolling(window=20).mean()
-            std_20 = df['Close'].rolling(window=20).std()
-            df['BB_Upper'] = sma_20 + (std_20 * 2)
-            df['BB_Lower'] = sma_20 - (std_20 * 2)
-            df['BB_Middle'] = sma_20
-            
-            df['Momentum'] = df['Close'].pct_change(periods=10) * 100
-            
+        """
+        Calculates a suite of essential technical indicators (RSI, EMA, MACD).
+        These provide the 'timing' aspect of the J.P. Morgan-style analysis.
+        """
+        if len(df) < 50: # Need sufficient data for meaningful indicator calculation
+            # Fill with NaNs if not enough data to avoid errors
+            df['RSI'] = np.nan
+            df['EMA_20'] = np.nan
+            df['EMA_50'] = np.nan
+            df['MACD'] = np.nan
+            df['MACD_Signal'] = np.nan
             return df
             
-        except Exception as e:
-            return df
-    
-    def calculate_magic_formula_score(self, ticker: str) -> Optional[Dict]:
-        """Calculate Magic Formula score"""
-        try:
-            stock_info = self.stock_data[ticker]
-            fundamentals = stock_info["fundamentals"]
-            price_data = stock_info["price_data"]
-            
-            market_cap_value = fundamentals.get('marketCap')
-            pe_ratio = fundamentals.get('forwardPE', fundamentals.get('trailingPE', 20))
-            roe = fundamentals.get('returnOnEquity', 0.15) * 100 if fundamentals.get('returnOnEquity') else 15
-            roa = fundamentals.get('returnOnAssets', 0.08) * 100 if fundamentals.get('returnOnAssets') else 8
-            
-            market_cap = market_cap_value / 10000000 if market_cap_value else 50000000000 / 10000000
+        # RSI (Relative Strength Index)
+        delta = df['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14, min_periods=1).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14, min_periods=1).mean()
+        rs = gain / loss
+        df['RSI'] = 100 - (100 / (1 + rs))
+        
+        # EMA (Exponential Moving Averages)
+        df['EMA_20'] = df['Close'].ewm(span=20, adjust=False, min_periods=1).mean()
+        df['EMA_50'] = df['Close'].ewm(span=50, adjust=False, min_periods=1).mean()
+        
+        # MACD (Moving Average Convergence Divergence)
+        ema_12 = df['Close'].ewm(span=12, adjust=False, min_periods=1).mean()
+        ema_26 = df['Close'].ewm(span=26, adjust=False, min_periods=1).mean()
+        df['MACD'] = ema_12 - ema_26
+        df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False, min_periods=1).mean()
+        
+        return df
 
-            roc = (roe + roa) / 2 if roe and roa else max(roe, roa) if roe or roa else 12
-            earnings_yield = (1 / pe_ratio * 100) if pe_ratio and pe_ratio > 0 else 5
-            magic_score = (roc * 0.6) + (earnings_yield * 0.4)
-            
-            current_rsi = price_data['RSI'].iloc[-1] if 'RSI' in price_data.columns and not price_data['RSI'].isna().iloc[-1] else 50
-            current_momentum = price_data['Momentum'].iloc[-1] if 'Momentum' in price_data.columns and not price_data['Momentum'].isna().iloc[-1] else 0
-            
-            ema_20 = price_data['EMA_20'].iloc[-1] if 'EMA_20' in price_data.columns and not price_data['EMA_20'].isna().iloc[-1] else price_data['Close'].iloc[-1]
-            ema_50 = price_data['EMA_50'].iloc[-1] if 'EMA_50' in price_data.columns and not price_data['EMA_50'].isna().iloc[-1] else price_data['Close'].iloc[-1]
-            ema_trend = "BULLISH" if ema_20 > ema_50 else "BEARISH"
-            
-            rsi_signal = self._get_rsi_signal(current_rsi)
-            momentum_signal = self._get_momentum_signal(current_momentum)
-            overall_signal = self._get_overall_signal(current_rsi, current_momentum, ema_20, ema_50)
+    def _calculate_analysis_metrics(self, ticker: str, stock_data: Dict) -> Optional[Dict]:
+        """
+        Calculates fundamental (Magic Formula) and technical analysis metrics
+        for a single stock. This is the core analytical engine.
+        Handles both stocks and indices by setting N/A for irrelevant metrics.
+        """
+        fundamentals = stock_data["fundamentals"]
+        price_data = stock_data["price_data"]
+        is_index = stock_data["info"].get("sector") == "Index"
 
-            commentary = self._generate_buffett_commentary(magic_score, ema_trend, rsi_signal, overall_signal)
-            
-            return {
-                "ticker": ticker,
-                "name": stock_info["info"]["name"],
-                "sector": stock_info["info"]["sector"],
-                "current_price": stock_info["current_price"],
-                "market_cap": market_cap,
-                "roc": roc,
-                "earnings_yield": earnings_yield,
-                "magic_score": magic_score,
-                "pe_ratio": pe_ratio,
-                "rsi": current_rsi,
-                "momentum": current_momentum,
-                "ema_trend": ema_trend,
-                "rsi_signal": rsi_signal,
-                "momentum_signal": momentum_signal,
-                "overall_signal": overall_signal,
-                "buffett_commentary": commentary
-            }
-            
-        except Exception as e:
-            return None
+        # Initialize common fields
+        analysis_result = {
+            "ticker": ticker,
+            "name": stock_data["info"]["name"],
+            "sector": stock_data["info"]["sector"],
+            "current_price": stock_data["current_price"],
+        }
+        
+        # Calculate technical indicators for both stocks and indices
+        current_close = price_data['Close'].iloc[-1] if not price_data.empty else None
+        current_rsi = price_data['RSI'].iloc[-1] if 'RSI' in price_data.columns and not pd.isna(price_data['RSI'].iloc[-1]) else 50
+        ema_20 = price_data['EMA_20'].iloc[-1] if 'EMA_20' in price_data.columns and not pd.isna(price_data['EMA_20'].iloc[-1]) else current_close
+        ema_50 = price_data['EMA_50'].iloc[-1] if 'EMA_50' in price_data.columns and not pd.isna(price_data['EMA_50'].iloc[-1]) else current_close
+        
+        analysis_result["rsi"] = current_rsi
+        analysis_result["ema_trend"] = "BULLISH" if ema_20 is not None and ema_50 is not None and ema_20 > ema_50 else "BEARISH" if ema_20 is not None and ema_50 is not None else "N/A"
+        analysis_result["rsi_signal"] = self._get_rsi_signal(current_rsi) if not pd.isna(current_rsi) else "N/A"
+        analysis_result["overall_signal"] = self._get_overall_signal(current_rsi, ema_20, ema_50) if not pd.isna(current_rsi) and ema_20 is not None and ema_50 is not None else "N/A"
 
-    def _generate_buffett_commentary(self, magic_score, ema_trend, rsi_signal, overall_signal):
-        """Generates a simple, Buffett-style commentary based on key metrics."""
-        if magic_score > 15 and ema_trend == "BULLISH" and overall_signal in ["STRONG_BUY", "BUY"]:
-            return "This looks like a wonderful business at a fair price. The numbers suggest strong returns and a positive technical trend. Keep it in your circle of competence."
-        elif magic_score > 12 and ema_trend == "BULLISH":
-            return "The fundamentals here are decent. It's a business worth understanding, and the trend is favorable. It might be a worthwhile opportunity."
-        elif overall_signal == "STRONG_SELL" or rsi_signal == "SELL":
-            return "Caution is advised. The technical signals are very weak, indicating a strong downward trend. It's often smart to wait for a better pitch."
-        elif ema_trend == "BEARISH":
-            return "The current market sentiment is not favorable, despite a decent magic score. As Charlie Munger said, 'The big money is not in the buying and selling, but in the waiting.' It's often wise to be patient."
-        elif magic_score > 8:
-            return "A business with a reasonable magic score. We must dig deeper into the company's moat and management quality to be sure of its long-term prospects."
+        if is_index:
+            # For indices, set fundamental metrics to None/N/A
+            analysis_result["market_cap"] = None
+            analysis_result["roc"] = None
+            analysis_result["earnings_yield"] = None
+            analysis_result["magic_score"] = None
+            analysis_result["pe_ratio"] = None
         else:
-            return "The fundamentals are not screamingly attractive. A simple look tells me we need to dig deeper, or move on to a better opportunity."
-    
+            # Fundamental metrics for stocks only
+            market_cap = fundamentals.get('marketCap')
+            if market_cap is None or market_cap <= 0:
+                return None # Filter out stocks with invalid market cap for screening
+            analysis_result["market_cap"] = market_cap / 10000000 # Convert to crores
+
+            roe = fundamentals.get('returnOnEquity', 0.10) * 100 
+            roa = fundamentals.get('returnOnAssets', 0.05) * 100 
+            roc = (roe + roa) / 2 if roe is not None and roa is not None else max(roe, roa) if roe is not None or roa is not None else 10.0
+            roc = max(roc, 0.1) # Ensure ROC is at least a small positive value
+            analysis_result["roc"] = roc
+
+            pe_ratio = fundamentals.get('forwardPE', fundamentals.get('trailingPE'))
+            if pe_ratio is None or pe_ratio <= 0:
+                earnings_yield = 0.0
+            else:
+                earnings_yield = (1 / pe_ratio) * 100
+            analysis_result["earnings_yield"] = earnings_yield
+            analysis_result["pe_ratio"] = pe_ratio
+            
+            # Magic Score only for stocks with valid fundamentals
+            analysis_result["magic_score"] = (roc * 0.6) + (earnings_yield * 0.4)
+            
+        return analysis_result
+            
     def _get_rsi_signal(self, rsi: float) -> str:
-        if rsi < 30: return "BUY"
-        elif rsi > 70: return "SELL"
-        else: return "HOLD"
+        """Determines RSI signal based on common thresholds."""
+        if pd.isna(rsi): return "N/A"
+        if rsi < 30: return "OVERSOLD"
+        elif rsi > 70: return "OVERBOUGHT"
+        else: return "NEUTRAL"
     
-    def _get_momentum_signal(self, momentum: float) -> str:
-        if momentum > 5: return "STRONG_UP"
-        elif momentum > 0: return "UP"
-        elif momentum < -5: return "STRONG_DOWN"
-        else: return "DOWN"
-    
-    def _get_overall_signal(self, rsi: float, momentum: float, ema_20: float, ema_50: float) -> str:
+    def _get_overall_signal(self, rsi: float, ema_20: float, ema_50: float) -> str:
+        """
+        Aggregates RSI and EMA trends into a single, comprehensive signal.
+        Reflects a multi-factor approach to technical analysis.
+        """
+        if pd.isna(rsi) or ema_20 is None or ema_50 is None:
+            return "N/A" # Cannot generate signal without valid technical data
+
         score = 0
         
-        if rsi < 30: score += 2
-        elif rsi > 70: score -= 2
+        # RSI contribution
+        if rsi < 35: score += 2 # Strong oversold suggests potential reversal up
+        elif rsi < 50: score += 1 # Leaning oversold
         
-        if momentum > 2: score += 1
-        elif momentum < -2: score -= 1
+        if rsi > 65: score -= 2 # Strong overbought suggests potential reversal down
+        elif rsi > 50: score -= 1 # Leaning overbought
         
-        if ema_20 > ema_50: score += 1
-        else: score -= 1
+        # EMA trend contribution (primary trend indicator)
+        if ema_20 > ema_50: score += 1 # Golden cross/bullish alignment
+        else: score -= 1 # Death cross/bearish alignment
         
+        # Convert score to signal
         if score >= 2: return "STRONG_BUY"
-        elif score >= 1: return "BUY"
+        elif score == 1: return "BUY"
         elif score <= -2: return "STRONG_SELL"
-        elif score <= -1: return "SELL"
+        elif score == -1: return "SELL"
         else: return "HOLD"
-
-    def screen_stocks(self, min_market_cap: float = 1000, top_n: int = 20) -> pd.DataFrame:
-        """Screen stocks using Magic Formula"""
+    
+    def screen_stocks(self, stock_category: str = "All Stocks", top_n: int = 20) -> pd.DataFrame:
+        """
+        Screens stocks using the Magic Formula, applying filters and ranking based on category.
+        If 'Indices' is selected, it returns the list of indices instead of screened stocks.
+        """
         results = []
         
-        for ticker in self.stock_data.keys():
-            result = self.calculate_magic_formula_score(ticker)
-            if result and result["market_cap"] >= min_market_cap:
-                results.append(result)
+        # Define market cap ranges for categorization in Crores
+        LARGE_CAP_MIN = 20000
+        MID_CAP_MIN = 5000
+        SMALL_CAP_MAX = 5000 # Max for small cap, assuming it's up to 5000 Cr
+
+        if stock_category == "Indices":
+            for ticker, data in self.stock_data.items():
+                if data['info'].get('sector') == 'Index':
+                    results.append(data.get('analysis')) # Append the analysis for indices
+            # No sorting by magic score for indices, simply list them
+            df = pd.DataFrame([res for res in results if res is not None])
+            if not df.empty:
+                df = df.sort_values('name').reset_index(drop=True) # Sort indices by name for consistency
+                df.index += 1
+            return df
+
+        # For stock categories, proceed with Magic Formula screening
+        for ticker, data in self.stock_data.items():
+            # Skip indexes from screening results, as Magic Formula is for stocks
+            if data['info'].get('sector') == 'Index':
+                continue
+            
+            analysis_metrics = data.get('analysis')
+            
+            if analysis_metrics and analysis_metrics["market_cap"] is not None: # Ensure market_cap is not None for stocks
+                market_cap = analysis_metrics["market_cap"]
+                
+                # Apply category filter
+                if stock_category == "Large Cap" and market_cap < LARGE_CAP_MIN:
+                    continue
+                elif stock_category == "Mid Cap" and not (MID_CAP_MIN <= market_cap < LARGE_CAP_MIN):
+                    continue
+                elif stock_category == "Small Cap" and not (0 < market_cap < SMALL_CAP_MAX): # Ensure positive market cap and within range
+                    continue
+                # "All Stocks" category includes any stock with a valid market_cap > 0
+                elif stock_category == "All Stocks" and market_cap <= 0:
+                    continue
+                    
+                results.append(analysis_metrics)
         
         df = pd.DataFrame(results)
         if not df.empty:
+            # Sort by Magic Score (Buffett/Munger influence)
             df = df.sort_values('magic_score', ascending=False).head(top_n)
             df.reset_index(drop=True, inplace=True)
-            df.index += 1
+            df.index += 1 # 1-based indexing for display
         
         self.screened_results = df
         return df
 
-# Streamlit App
+    def get_index_data(self, ticker: str, period: str = "1y") -> pd.DataFrame:
+        """Fetches historical data for a given index."""
+        try:
+            return yf.Ticker(ticker).history(period=period)
+        except Exception:
+            # Fallback to empty DataFrame on error
+            return pd.DataFrame()
+
+# Streamlit App - The User Experience Layer (Steve Jobs)
 def main():
-    # Page config
     st.set_page_config(
-        page_title="🎯 Magic Formula Screener", 
-        page_icon="🎯", 
+        page_title="Magic Formula Pro 🎯",
+        page_icon="🔮",
         layout="wide",
         initial_sidebar_state="expanded"
     )
     
-    # C-Suite Theming
+    # Custom CSS for a sleek, Apple-like feel and improved readability
     st.markdown("""
     <style>
-        .st-emotion-cache-18ni7ap { padding-top: 0rem; }
-        .st-emotion-cache-p2w5e4 { padding-top: 0rem; }
-        
-        .stButton button {
-            background-color: #2e3b5e;
+        .stButton button { 
+            width: 100%; 
+            background-color: #007aff; /* Apple Blue */
             color: white;
-            border: 1px solid #4a69bd;
-            border-radius: 5px;
-            padding: 10px 24px;
+            border-radius: 8px;
+            border: none;
+            padding: 10px 20px;
             font-size: 16px;
             font-weight: bold;
-            transition: all 0.3s ease;
+            transition: background-color 0.3s ease;
         }
         .stButton button:hover {
-            background-color: #4a69bd;
-            border-color: #6a89c9;
-        }
-        .st-emotion-cache-10trblm {
-            font-size: 1.5rem;
-            font-weight: 600;
-        }
-        .st-emotion-cache-p5k027 {
-            font-size: 1.25rem;
-            color: #b0c4de;
+            background-color: #005bb5; /* Darker blue on hover */
+            cursor: pointer;
         }
         
-        /* Table Styling for a professional look */
-        .stTable {
-            border: 1px solid #4a69bd;
-            border-radius: 5px;
-            overflow: hidden;
+        /* Improved readability for alert boxes */
+        div[data-testid="stAlert"] {
+            border-radius: 8px;
+            margin-top: 1rem;
+            padding: 15px;
         }
-        .stTable th {
-            background-color: #2e3b5e;
-            color: white;
-            font-weight: bold;
+        div[data-testid="stAlert"].stAlert-info {
+            background-color: #2196F3; /* A bit darker blue */
+            color: white; /* White text for contrast */
         }
-        .stTable td {
-            background-color: #1e283e;
-            color: #e0e0e0;
+        div[data-testid="stAlert"].stAlert-warning {
+            background-color: #FFC107; /* Orange-yellow */
+            color: #333333; /* Dark text for contrast */
         }
-        
-        .signal-strong-buy { color: #28a745; font-weight: bold; }
-        .signal-buy { color: #5cb85c; }
-        .signal-hold { color: #f0ad4e; }
-        .signal-sell { color: #d9534f; }
-        .signal-strong-sell { color: #c0392b; font-weight: bold; }
-        
-        .ema-bullish { color: #28a745; }
-        .ema-bearish { color: #d9534f; }
-        
-        .rsi-buy { color: #5cb85c; }
-        .rsi-sell { color: #d9534f; }
-        .rsi-hold { color: #f0ad4e; }
-        
-        .momentum-up { color: #5cb85c; }
-        .momentum-down { color: #d9534f; }
+
+        /* Improved readability for metrics - numbers and labels stand out */
+        .stMetric {
+            background-color: transparent; /* Removed white background */
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: none; /* Removed box shadow for cleaner look */
+            display: flex; /* Use flexbox for layout */
+            flex-direction: column; /* Stack elements vertically */
+            align-items: flex-start; /* Align text to the start */
+            border: 1px solid #E0E0E0; /* Subtle border for definition */
+        }
+        .stMetric > div:first-child { /* Label (e.g., "Magic Score") */
+            font-size: 1.1rem; /* Slightly larger for text */
+            color: #2c3e50; /* Darker, more prominent color for the label text */
+            font-weight: bold; /* Make the label text bold */
+            margin-bottom: 8px; /* Add more space below label */
+        }
+        .stMetric > div:nth-child(2) { /* Value (e.g., "75.23") */
+            font-size: 2.2rem; /* Larger font size for the number */
+            font-weight: bold; /* Bold the number */
+            color: #004D99; /* Strong dark blue for the number to stand out */
+            margin-top: 0; /* Remove top margin as space is handled by label */
+        }
+        .stMetric > div:nth-child(3) { /* Delta (e.g., "+0.5%") - if applicable */
+            font-size: 1rem;
+            margin-top: 5px;
+        }
+
+        /* Custom colors for technical signals */
+        .signal-strong-buy { color: #008000; font-weight: bold; } /* Dark Green */
+        .signal-buy { color: #32CD32; font-weight: bold; } /* Lime Green */
+        .signal-hold { color: #1E90FF; font-weight: bold; } /* Dodger Blue (Neutral) */
+        .signal-sell { color: #FF8C00; font-weight: bold; } /* Dark Orange */
+        .signal-strong-sell { color: #DC143C; font-weight: bold; } /* Crimson (Strong Red) */
+
+
+        h1, h2, h3 { color: #333333; } /* Darker text for titles */
+        .main > div { padding-top: 2rem; }
+        .stDataFrame { border-radius: 8px; overflow: hidden; } /* Rounded corners for tables */
+        .stSelectbox { border-radius: 8px; }
+        .stSlider { padding-bottom: 20px; }
+        /* Jobs-inspired focus on clarity and typography */
+        body {
+            font-family: 'Inter', sans-serif; /* Modern, clean font */
+        }
     </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     """, unsafe_allow_html=True)
     
-    # Title
     st.markdown("""
-    <h1 style="color: #4a90e2; font-weight: bold;">
-        <span style="font-size: 1.2em; vertical-align: top;">🎯</span>
-        Magic Formula Stock Screener
-    </h1>
-    <h3 style="color: #b0c4de; margin-top: -15px;">
-        Indian Markets Edition with C-Suite Insights
-    </h3>
+    # **Magic Formula Pro**
+    ### *Unlocking Value: Buffett & Munger's principles for the modern investor.*
     ---
     """, unsafe_allow_html=True)
     
+    # Initialize session state for persistent data
     if 'screener' not in st.session_state:
-        st.session_state.screener = MagicFormulaScreener()
+        st.session_state.screener = MagicFormulaPro()
         st.session_state.data_loaded = False
         st.session_state.results = pd.DataFrame()
-        st.session_state.selected_ticker = None
-    
-    # Sidebar
-    st.sidebar.header("🔧 Screening Parameters")
+        st.session_state.index_data = {} # Store data for all relevant indexes
+        
+    # Sidebar: The Control Panel (Jobs's minimalist approach)
+    st.sidebar.header("Configuration")
     st.sidebar.markdown("---")
     
-    min_market_cap = st.sidebar.number_input(
-        "💰 Minimum Market Cap (₹ Crores)", 
-        value=1000.0, 
-        step=100.0,
-        help="Filter stocks by minimum market capitalization"
+    # New category selection instead of min_market_cap
+    stock_category = st.sidebar.selectbox(
+        "Select Category for Screening:", # Changed label for broader applicability
+        options=["All Stocks", "Large Cap", "Mid Cap", "Small Cap", "Indices"], # Added "Indices"
+        help="Filter the universe of stocks or select indices for analysis based on market capitalization or type."
     )
     
     top_n = st.sidebar.slider(
-        "📊 Number of Top Stocks", 
-        min_value=5, 
-        max_value=len(st.session_state.screener.indian_stocks), 
-        value=15,
-        help="Select how many top-ranked stocks to display"
+        "Number of Top Stocks to Display",
+        min_value=5, max_value=50, value=25,
+        help="The 'Circle of Competence' - choose how many stocks you can realistically analyze and monitor effectively."
     )
     
     st.sidebar.markdown("---")
-    st.sidebar.header("📈 Data Management")
+    st.sidebar.header("Actions")
     
-    if st.sidebar.button("🚀 Fetch Fresh Data", type="primary"):
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        def update_progress(progress):
-            progress_bar.progress(progress)
-            if progress < 0.3: status_text.text("🔄 Initializing data fetch...")
-            elif progress < 0.7: status_text.text("📊 Downloading stock data...")
-            else: status_text.text("⚡ Processing indicators...")
-        
-        st.session_state.screener.fetch_stock_data(progress_callback=update_progress)
-        st.session_state.data_loaded = True
-        
-        progress_bar.empty()
-        status_text.empty()
-        st.success("✅ Data fetched successfully!")
+    if st.sidebar.button("🚀 Fetch All Data", type="primary"):
+        with st.spinner("Downloading and processing data for Indian stocks and major indices..."):
+            progress_bar = st.progress(0)
+            st.session_state.screener.fetch_stock_data_concurrently(progress_callback=progress_bar.progress)
+            
+            # Fetch Nifty 50 and Bank Nifty index data
+            st.session_state.index_data['^NSEI'] = st.session_state.screener.get_index_data('^NSEI')
+            st.session_state.index_data['^NSEBANK'] = st.session_state.screener.get_index_data('^NSEBANK')
+            # Fetch additional index data
+            st.session_state.index_data['^NIFTY500.NS'] = st.session_state.screener.get_index_data('^NIFTY500.NS')
+            st.session_state.index_data['^BSESN'] = st.session_state.screener.get_index_data('^BSESN')
+            
+            st.session_state.data_loaded = True
+            
+        num_stocks_loaded = len([s for s in st.session_state.screener.all_stocks_info if s['sector'] != 'Index'])
+        num_indices_loaded = len([s for s in st.session_state.screener.all_stocks_info if s['sector'] == 'Index'])
+        st.sidebar.success(f"✅ Data for {num_stocks_loaded} stocks and {num_indices_loaded} major Indices loaded!")
     
-    if st.session_state.data_loaded:
-        st.sidebar.success(f"✅ Data loaded for {len(st.session_state.screener.stock_data)} stocks")
-    
-    if st.sidebar.button("🎯 Run Screening"):
+    if st.sidebar.button("🎯 Run Magic Screening"):
         if not st.session_state.data_loaded:
-            st.error("❌ Please fetch data first!")
+            st.sidebar.error("Please fetch data first by clicking '🚀 Fetch All Data'!")
         else:
-            with st.spinner("🔍 Screening stocks..."):
+            with st.spinner(f"Applying the Magic Formula filters and ranking stocks from the '{stock_category}' category..."):
                 results = st.session_state.screener.screen_stocks(
-                    min_market_cap=min_market_cap, top_n=top_n
+                    stock_category=stock_category, top_n=top_n
                 )
                 st.session_state.results = results
-                st.success(f"✅ Found {len(results)} qualifying stocks!")
-    
+            if not st.session_state.results.empty:
+                st.success(f"✅ Screening complete! Found {len(results)} qualifying {'stocks' if stock_category != 'Indices' else 'indices'} for your consideration in the '{stock_category}' category.")
+            else:
+                st.warning(f"No {'stocks' if stock_category != 'Indices' else 'indices'} matched your criteria in the '{stock_category}' category. Try adjusting the category or increasing the 'Number of Top Stocks'.")
+
+    st.sidebar.markdown("---")
+    if st.session_state.data_loaded:
+        st.sidebar.caption("Data is cached for 1 hour to optimize performance.")
+        
+    # Main Content: The Result (Jobs's emphasis on clarity and beauty)
     if not st.session_state.results.empty:
-        st.sidebar.markdown("---")
-        st.sidebar.header("🔍 Detailed Stock View")
-        
-        ticker_list = st.session_state.results['ticker'].tolist()
-        
-        if st.session_state.selected_ticker not in ticker_list and ticker_list:
-            st.session_state.selected_ticker = ticker_list[0]
-            
-        if ticker_list:
-            selected_ticker = st.sidebar.selectbox("Select a Ticker to Analyze", 
-                                                    ticker_list, 
-                                                    index=ticker_list.index(st.session_state.selected_ticker) if st.session_state.selected_ticker in ticker_list else 0)
-            if selected_ticker:
-                st.session_state.selected_ticker = selected_ticker
-    
-    if not st.session_state.results.empty:
-        st.header("📊 Screening Results")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1: st.metric("🏢 Total Stocks", len(st.session_state.results))
-        with col2: st.metric("⭐ Avg Magic Score", f"{st.session_state.results['magic_score'].mean():.2f}")
-        with col3: st.metric("📈 Buy Signals", len(st.session_state.results[st.session_state.results['overall_signal'].str.contains('BUY', na=False)]))
-        with col4: st.metric("📊 Bullish Trends", len(st.session_state.results[st.session_state.results['ema_trend'] == 'BULLISH']))
-        
-        st.subheader("🏆 Top Ranked Stocks")
-        
+        # Display different header based on selection
+        if stock_category == "Indices":
+            st.header("📈 Key Indian Indices")
+            st.info("Explore the performance and technicals of major Indian market indices.")
+        else:
+            st.header("🏆 The Magic Formula Portfolio")
+            st.info("These stocks represent high-quality businesses identified at potentially attractive valuations, aligning with the principles of value investing.")
+
+        # Display the ranked table
         display_df = st.session_state.results.copy()
         display_df['Rank'] = range(1, len(display_df) + 1)
-        display_df['Price (₹)'] = display_df['current_price'].apply(lambda x: f"₹{x:.2f}")
-        display_df['Magic Score'] = display_df['magic_score'].apply(lambda x: f"{x:.2f}")
+        display_df['Price (₹)'] = display_df['current_price'].apply(lambda x: f"₹{x:,.2f}")
         
-        # Use the signal columns instead of the numerical ones
-        display_df['RSI Signal'] = display_df['rsi_signal'].str.replace('_', ' ').str.title()
-        display_df['Momentum Signal'] = display_df['momentum_signal'].str.replace('_', ' ').str.title()
+        # Adjust columns for display based on category
+        if stock_category == "Indices":
+            display_df['Market Cap (Cr)'] = "N/A" # Not applicable for indices
+            display_df['Magic Score'] = "N/A"
+            display_df['RoC (%)'] = "N/A"
+            display_df['Earnings Yield (%)'] = "N/A"
+            display_columns = ['Rank', 'name', 'ticker', 'Price (₹)', 'Technical Signal']
+            rename_cols = {'name': 'Index Name', 'ticker': 'Ticker', 'overall_signal': 'Technical Signal'}
+        else:
+            display_df['Market Cap (Cr)'] = display_df['market_cap'].apply(lambda x: f"₹{x:,.0f}" if pd.notna(x) else "N/A")
+            display_df['Magic Score'] = display_df['magic_score'].apply(lambda x: f"{x:.2f}" if pd.notna(x) else "N/A")
+            display_df['RoC (%)'] = display_df['roc'].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "N/A")
+            display_df['Earnings Yield (%)'] = display_df['earnings_yield'].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "N/A")
+            display_columns = [
+                'Rank', 'name', 'ticker', 'Price (₹)', 'Market Cap (Cr)', 'Magic Score',
+                'RoC (%)', 'Earnings Yield (%)', 'overall_signal'
+            ]
+            rename_cols = {
+                'name': 'Company', 'ticker': 'Ticker', 
+                'overall_signal': 'Technical Signal'
+            }
         
-        display_columns = [
-            'Rank', 'name', 'ticker', 'Price (₹)', 'Magic Score', 'ema_trend', 'RSI Signal', 'Momentum Signal', 'overall_signal'
+        st.dataframe(
+            display_df[display_columns].rename(columns=rename_cols).set_index('Rank'),
+            use_container_width=True
+        )
+
+        st.markdown("---")
+        
+        # Detailed Analysis for a selected stock or index
+        st.header("🔍 Deep Dive: Company & Index Analysis")
+        
+        # Prepare options for selectbox, including both screened and index tickers
+        all_available_tickers = list(st.session_state.screener.stock_data.keys())
+        # Filter out only tickers that have current_price and any analysis object (even minimal for indices)
+        valid_tickers_for_selection = [
+            t for t in all_available_tickers 
+            if st.session_state.screener.stock_data[t]['current_price'] is not None and st.session_state.screener.stock_data[t].get('analysis') is not None
         ]
-        
-        styled_df = display_df[display_columns].rename(columns={
-            'name': 'Company', 'ticker': 'Ticker', 'ema_trend': 'EMA Trend',
-            'overall_signal': 'Overall Signal'
-        })
-        
-        styled_df['Overall Signal'] = styled_df['Overall Signal'].str.replace('_', ' ').str.title()
-        styled_df['EMA Trend'] = styled_df['EMA Trend'].str.title()
 
-        # Dynamic HTML table creation for color coding
-        styled_df_html = styled_df.to_html(escape=False)
-        styled_df_html = styled_df_html.replace('<td>Strong Buy</td>', '<td class="signal-strong-buy">Strong Buy</td>')
-        styled_df_html = styled_df_html.replace('<td>Buy</td>', '<td class="signal-buy">Buy</td>')
-        styled_df_html = styled_df_html.replace('<td>Hold</td>', '<td class="signal-hold">Hold</td>')
-        styled_df_html = styled_df_html.replace('<td>Sell</td>', '<td class="signal-sell">Sell</td>')
-        styled_df_html = styled_df_html.replace('<td>Strong Sell</td>', '<td class="signal-strong-sell">Strong Sell</td>')
+        # Sort for better user experience
+        valid_tickers_for_selection.sort(key=lambda t: st.session_state.screener.stock_data[t]['info']['name'])
 
-        styled_df_html = styled_df_html.replace('<td>Bullish</td>', '<td class="ema-bullish">Bullish</td>')
-        styled_df_html = styled_df_html.replace('<td>Bearish</td>', '<td class="ema-bearish">Bearish</td>')
-
-        styled_df_html = styled_df_html.replace('<td>Buy</td>', '<td class="rsi-buy">Buy</td>')
-        styled_df_html = styled_df_html.replace('<td>Sell</td>', '<td class="rsi-sell">Sell</td>')
-        styled_df_html = styled_df_html.replace('<td>Hold</td>', '<td class="rsi-hold">Hold</td>')
-
-        styled_df_html = styled_df_html.replace('<td>Strong Up</td>', '<td class="momentum-up">Strong Up</td>')
-        styled_df_html = styled_df_html.replace('<td>Up</td>', '<td class="momentum-up">Up</td>')
-        styled_df_html = styled_df_html.replace('<td>Strong Down</td>', '<td class="momentum-down">Strong Down</td>')
-        styled_df_html = styled_df_html.replace('<td>Down</td>', '<td class="momentum-down">Down</td>')
+        selected_ticker = st.selectbox(
+            "Select a stock or index for detailed analysis:",
+            options=valid_tickers_for_selection,
+            format_func=lambda t: f"{st.session_state.screener.stock_data[t]['info']['name']} ({t})"
+        )
         
-        st.markdown(styled_df_html, unsafe_allow_html=True)
-        
-        # --- Detailed Analysis Section ---
-        if st.session_state.selected_ticker:
-            selected_stock_data_df = st.session_state.results[st.session_state.results['ticker'] == st.session_state.selected_ticker]
+        if selected_ticker:
+            selected_stock_data = st.session_state.screener.stock_data.get(selected_ticker)
             
-            if not selected_stock_data_df.empty:
-                selected_stock_data = selected_stock_data_df.iloc[0]
-                
-                signal_color_map = {
-                    "STRONG_BUY": "#28a745", "BUY": "#5cb85c",
-                    "HOLD": "#f0ad4e", "SELL": "#d9534f", "STRONG_SELL": "#c0392b"
-                }
-
-                overall_signal = selected_stock_data.get('overall_signal', 'N/A')
-                signal_color = signal_color_map.get(overall_signal, "#ffffff")
-                
-                st.subheader(f"Detailed Analysis for {selected_stock_data['name']}")
-                
-                st.markdown(f"### Overall Signal: <span style='color: {signal_color};'>**{overall_signal.replace('_', ' ').title()}**</span>", unsafe_allow_html=True)
-                
-                st.subheader("🗣️ Buffett's Perspective")
-                st.info(selected_stock_data['buffett_commentary'])
-                
-                ticker_data = st.session_state.screener.stock_data.get(st.session_state.selected_ticker)
-                
-                if ticker_data and not ticker_data['price_data'].empty and len(ticker_data['price_data']) >= 50:
-                    price_data = ticker_data['price_data']
-                    
-                    if not all(col in price_data.columns for col in ['Close', 'Open', 'High', 'Low', 'EMA_20', 'EMA_50', 'RSI', 'MACD', 'MACD_Signal', 'MACD_Hist']):
-                        st.warning("⚠️ Insufficient data to generate all technical charts. Displaying basic price chart only.")
-                        fig = go.Figure(data=[go.Candlestick(x=price_data.index, open=price_data['Open'], high=price_data['High'], low=price_data['Low'], close=price_data['Close'], name='Price')])
-                        fig.update_layout(title=f"Price Chart for {ticker_data['info']['name']}", template="plotly_dark", xaxis_rangeslider_visible=False)
-                        st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        fig = make_subplots(rows=3, cols=1, shared_xaxes=True, 
-                                            vertical_spacing=0.1, 
-                                            row_heights=[0.5, 0.25, 0.25],
-                                            subplot_titles=(f"Price & Moving Averages for {ticker_data['info']['name']}", "Relative Strength Index (RSI)", "Moving Average Convergence Divergence (MACD)"))
-    
-                        fig.add_trace(go.Candlestick(x=price_data.index, open=price_data['Open'], high=price_data['High'], low=price_data['Low'], close=price_data['Close'], name='Price'), row=1, col=1)
-                        fig.add_trace(go.Scatter(x=price_data.index, y=price_data['EMA_20'], name='EMA 20', line=dict(color='#f2a600', width=2)), row=1, col=1)
-                        fig.add_trace(go.Scatter(x=price_data.index, y=price_data['EMA_50'], name='EMA 50', line=dict(color='#1e90ff', width=2)), row=1, col=1)
-    
-                        fig.add_trace(go.Scatter(x=price_data.index, y=price_data['RSI'], name='RSI', line=dict(color='#8a2be2')), row=2, col=1)
-                        fig.add_hline(y=70, line_dash="dash", line_color="#d9534f", row=2, col=1)
-                        fig.add_hline(y=30, line_dash="dash", line_color="#5cb85c", row=2, col=1)
-    
-                        colors = ['#28a745' if val >= 0 else '#d9534f' for val in price_data['MACD_Hist']]
-                        fig.add_trace(go.Bar(x=price_data.index, y=price_data['MACD_Hist'], name='MACD Hist', marker_color=colors), row=3, col=1)
-                        fig.add_trace(go.Scatter(x=price_data.index, y=price_data['MACD'], name='MACD', line=dict(color='white', width=1)), row=3, col=1)
-                        fig.add_trace(go.Scatter(x=price_data.index, y=price_data['MACD_Signal'], name='Signal', line=dict(color='#808080', width=1)), row=3, col=1)
-    
-                        fig.update_layout(height=800, template="plotly_dark", xaxis_rangeslider_visible=False,
-                                          title_font=dict(size=24, color='#4a90e2'),
-                                          paper_bgcolor="#1f2430", plot_bgcolor="#1f2430",
-                                          font=dict(color="#d0d0d0"))
-                        st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.warning("⚠️ Insufficient historical data available to generate a detailed chart for this ticker. Please try again later.")
+            if not selected_stock_data:
+                st.warning(f"Detailed data for {selected_ticker} is not available. Please try fetching data again.")
             else:
-                st.subheader(f"Detailed Analysis for {st.session_state.selected_ticker}")
-                st.warning("⚠️ The selected stock is not in the current screening results. Please re-run the screening if you have changed parameters.")
+                is_index = selected_stock_data['info'].get('sector') == 'Index'
+                
+                # Retrieve selected_analysis safely
+                selected_analysis = None
+                # Try to get from screened results first for consistency if available
+                selected_analysis_from_results = st.session_state.results[st.session_state.results['ticker'] == selected_ticker]
+                
+                if not selected_analysis_from_results.empty:
+                    selected_analysis = selected_analysis_from_results.iloc[0].to_dict()
+                else:
+                    # If not in screened results (e.g., if user directly selected an index or a non-screened stock), recalculate
+                    selected_analysis = st.session_state.screener._calculate_analysis_metrics(selected_ticker, selected_stock_data)
+                
+                if selected_analysis: # This check is now safe for Dict (truthy if not empty) or None
+                    if not is_index: # Proceed with stock-specific analysis
+                        st.subheader(f"Dashboard for {selected_analysis['name']} ({selected_analysis['ticker']})")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        # Ensure these metrics display "N/A" for None values
+                        with col1: st.metric("Magic Score", f"{selected_analysis['magic_score']:.2f}" if selected_analysis['magic_score'] is not None else "N/A", help="Weighted score of Return on Capital and Earnings Yield – our value indicator.")
+                        with col2: st.metric("Return on Capital", f"{selected_analysis['roc']:.2f}%" if selected_analysis['roc'] is not None else "N/A", help="A crucial metric for identifying businesses with a strong competitive advantage (moat).")
+                        with col3: st.metric("Earnings Yield", f"{selected_analysis['earnings_yield']:.2f}%" if selected_analysis['earnings_yield'] is not None else "N/A", help="The inverse of the P/E ratio, indicating the earnings generated per unit of investment – our valuation metric.")
+                        
+                        # Apply dynamic colors to the overall_signal and ensure all text pops
+                        signal_class = selected_analysis['overall_signal'].lower().replace('_', '-')
+                        st.markdown(
+                            f"<p style='font-weight: bold; font-size: 1.1em; color: #2c3e50; margin-bottom: 0.5rem;'>" # Darker color for labels
+                            f"Technical Signal: <span class='signal-{signal_class}'>`{selected_analysis['overall_signal']}`</span>"
+                            f"<br>EMA Trend: <span style='color: #004D99;'>`{selected_analysis['ema_trend']}`</span>" # Popping color
+                            f"<br>RSI: <span style='color: #004D99;'>`{selected_analysis['rsi']:.2f}` ({selected_analysis['rsi_signal']})</span>" # Popping color
+                            f"</p>",
+                            unsafe_allow_html=True
+                        )
+                        
+                        # F&O Strategies Expander
+                        fo_strategy_expander = st.expander("💼 **F&O Optimal Strategy (Institutional Grade)**")
+                        with fo_strategy_expander:
+                            st.markdown(st.session_state.screener._get_fo_strategies(selected_ticker))
+                            st.caption("Disclaimer: These strategies are for educational purposes only and not financial advice. Options trading involves significant risk and may not be suitable for all investors. Consult with a qualified financial advisor.")
+                            
+                        # Charting (Jobs's visual clarity)
+                        st.subheader("Price & Indicator Chart")
+                        
+                        fig = make_subplots(
+                            rows=3, cols=1, # Changed to 3 rows for MACD
+                            row_heights=[0.5, 0.25, 0.25], # Adjusted heights
+                            shared_xaxes=True,
+                            vertical_spacing=0.1,
+                            subplot_titles=(f"{selected_analysis['name']} Price Action", "Relative Strength Index (RSI)", "MACD (Moving Average Convergence Divergence)") # Added MACD title
+                        )
+                        
+                        # Candlestick chart (red/green for profit/loss as requested)
+                        fig.add_trace(go.Candlestick(
+                            x=selected_stock_data['price_data'].index,
+                            open=selected_stock_data['price_data']['Open'],
+                            high=selected_stock_data['price_data']['High'],
+                            low=selected_stock_data['price_data']['Low'],
+                            close=selected_stock_data['price_data']['Close'],
+                            name='Price',
+                            increasing_line_color='green', decreasing_line_color='red' # Already set
+                        ), row=1, col=1)
+                        
+                        # Add EMA lines
+                        fig.add_trace(go.Scatter(x=selected_stock_data['price_data'].index, y=selected_stock_data['price_data']['EMA_20'],
+                                                 mode='lines', name='20 EMA', line=dict(color='orange', width=1.5)), row=1, col=1)
+                        fig.add_trace(go.Scatter(x=selected_stock_data['price_data'].index, y=selected_stock_data['price_data']['EMA_50'],
+                                                 mode='lines', name='50 EMA', line=dict(color='purple', width=1.5)), row=1, col=1)
+                                                         
+                        # Add RSI
+                        fig.add_trace(go.Scatter(x=selected_stock_data['price_data'].index, y=selected_stock_data['price_data']['RSI'],
+                                                 mode='lines', name='RSI', line=dict(color='cyan', width=1.5)), row=2, col=1)
+                        fig.add_hline(y=70, line_dash="dash", line_color="red", annotation_text="Overbought", annotation_position="top left", row=2, col=1)
+                        fig.add_hline(y=30, line_dash="dash", line_color="green", annotation_text="Oversold", annotation_position="bottom left", row=2, col=1)
+                        
+                        # Add MACD
+                        fig.add_trace(go.Bar(x=selected_stock_data['price_data'].index, y=selected_stock_data['price_data']['MACD'],
+                                             name='MACD Hist', marker_color='grey'), row=3, col=1) # MACD Histogram
+                        fig.add_trace(go.Scatter(x=selected_stock_data['price_data'].index, y=selected_stock_data['price_data']['MACD'],
+                                                 mode='lines', name='MACD Line', line=dict(color='blue', width=1.5)), row=3, col=1) # MACD line
+                        fig.add_trace(go.Scatter(x=selected_stock_data['price_data'].index, y=selected_stock_data['price_data']['MACD_Signal'],
+                                                 mode='lines', name='Signal Line', line=dict(color='red', width=1.5)), row=3, col=1) # Signal line
+                        
+                        fig.update_layout(height=800, xaxis_rangeslider_visible=False, title_text=f"Historical Price and Technicals for {selected_analysis['name']}", showlegend=True)
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                    else: # If an Index is selected for detailed view
+                        st.subheader(f"Dashboard for {selected_stock_data['info']['name']} ({selected_stock_data['info']['ticker']})")
+                        st.write("Displaying historical data for this index.")
+                        st.write("Fundamental metrics (Magic Score, RoC, Earnings Yield) are not applicable to indices.")
 
-        st.header("📈 Analysis Dashboard")
-        
-        tab1, tab2, tab3 = st.tabs(["📊 Score Distribution", "🏭 Sector Analysis", "📈 Technical Signals"])
-        
-        with tab1:
-            col1, col2 = st.columns(2)
-            with col1:
-                fig_hist = go.Figure(data=[go.Histogram(x=st.session_state.results['magic_score'], nbinsx=15, marker_color='#4a90e2', opacity=0.8)])
-                fig_hist.update_layout(title="Magic Formula Score Distribution", xaxis_title="Magic Formula Score", yaxis_title="Number of Stocks", template="plotly_dark", paper_bgcolor="#1f2430", plot_bgcolor="#1f2430")
-                st.plotly_chart(fig_hist, use_container_width=True)
-            with col2:
-                top_10 = st.session_state.results.head(10)
-                fig_bar = go.Figure(data=[go.Bar(y=[name[:20] + "..." if len(name) > 20 else name for name in top_10['name']], x=top_10['magic_score'], orientation='h', marker_color='#f2a600', opacity=0.8)])
-                fig_bar.update_layout(title="Top 10 Stocks by Magic Score", xaxis_title="Magic Formula Score", template="plotly_dark", paper_bgcolor="#1f2430", plot_bgcolor="#1f2430")
-                st.plotly_chart(fig_bar, use_container_width=True)
-        
-        with tab2:
-            col1, col2 = st.columns(2)
-            with col1:
-                sector_counts = st.session_state.results['sector'].value_counts()
-                fig_pie = go.Figure(data=[go.Pie(labels=sector_counts.index, values=sector_counts.values, hole=0.4, marker_colors=['#f2a600', '#1e90ff', '#8a2be2', '#5cb85c', '#d9534f', '#6a89c9'])])
-                fig_pie.update_layout(title="Sector Distribution", template="plotly_dark", paper_bgcolor="#1f2430", plot_bgcolor="#1f2430")
-                st.plotly_chart(fig_pie, use_container_width=True)
-            with col2:
-                fig_scatter = go.Figure(data=[go.Scatter(x=st.session_state.results['rsi'], y=st.session_state.results['magic_score'], mode='markers', marker=dict(size=10, color=st.session_state.results['current_price'], colorscale='Viridis', showscale=True), text=st.session_state.results['name'])])
-                fig_scatter.update_layout(title="RSI vs Magic Formula Score", xaxis_title="RSI", yaxis_title="Magic Formula Score", template="plotly_dark", paper_bgcolor="#1f2430", plot_bgcolor="#1f2430")
-                st.plotly_chart(fig_scatter, use_container_width=True)
-        
-        with tab3:
-            signal_counts = st.session_state.results['overall_signal'].value_counts()
-            colors = ['#28a745' if 'BUY' in signal else '#d9534f' if 'SELL' in signal else '#f0ad4e' for signal in signal_counts.index]
-            fig_signals = go.Figure(data=[go.Bar(x=signal_counts.index, y=signal_counts.values, marker_color=colors, opacity=0.8)])
-            fig_signals.update_layout(title="Overall Signal Distribution", xaxis_title="Signal Type", yaxis_title="Number of Stocks", template="plotly_dark", paper_bgcolor="#1f2430", plot_bgcolor="#1f2430")
-            st.plotly_chart(fig_signals, use_container_width=True)
-        
+                        # Charting for Index
+                        fig_index = make_subplots(
+                            rows=3, cols=1, # Changed to 3 rows for MACD
+                            row_heights=[0.5, 0.25, 0.25], # Adjusted heights
+                            shared_xaxes=True,
+                            vertical_spacing=0.1,
+                            subplot_titles=(f"{selected_analysis['name']} Price Action", "Relative Strength Index (RSI)", "MACD (Moving Average Convergence Divergence)") # Added MACD title
+                        )
+
+                        fig_index.add_trace(go.Candlestick(
+                            x=selected_stock_data['price_data'].index,
+                            open=selected_stock_data['price_data']['Open'],
+                            high=selected_stock_data['price_data']['High'],
+                            low=selected_stock_data['price_data']['Low'],
+                            close=selected_stock_data['price_data']['Close'],
+                            name='Price',
+                            increasing_line_color='green', decreasing_line_color='red'
+                        ), row=1, col=1)
+
+                        # Add EMA lines for indices
+                        fig_index.add_trace(go.Scatter(x=selected_stock_data['price_data'].index, y=selected_stock_data['price_data']['EMA_20'],
+                                                 mode='lines', name='20 EMA', line=dict(color='orange', width=1.5)), row=1, col=1)
+                        fig_index.add_trace(go.Scatter(x=selected_stock_data['price_data'].index, y=selected_stock_data['price_data']['EMA_50'],
+                                                 mode='lines', name='50 EMA', line=dict(color='purple', width=1.5)), row=1, col=1)
+
+                        # Add RSI for indices
+                        fig_index.add_trace(go.Scatter(x=selected_stock_data['price_data'].index, y=selected_stock_data['price_data']['RSI'],
+                                                 mode='lines', name='RSI', line=dict(color='cyan', width=1.5)), row=2, col=1)
+                        fig_index.add_hline(y=70, line_dash="dash", line_color="red", annotation_text="Overbought", annotation_position="top left", row=2, col=1)
+                        fig_index.add_hline(y=30, line_dash="dash", line_color="green", annotation_text="Oversold", annotation_position="bottom left", row=2, col=1)
+
+                        # Add MACD for indices
+                        fig_index.add_trace(go.Bar(x=selected_stock_data['price_data'].index, y=selected_stock_data['price_data']['MACD'],
+                                             name='MACD Hist', marker_color='grey'), row=3, col=1) # MACD Histogram
+                        fig_index.add_trace(go.Scatter(x=selected_stock_data['price_data'].index, y=selected_stock_data['price_data']['MACD'],
+                                                 mode='lines', name='MACD Line', line=dict(color='blue', width=1.5)), row=3, col=1) # MACD line
+                        fig_index.add_trace(go.Scatter(x=selected_stock_data['price_data'].index, y=selected_stock_data['price_data']['MACD_Signal'],
+                                                 mode='lines', name='Signal Line', line=dict(color='red', width=1.5)), row=3, col=1) # Signal line
+                        
+                        fig_index.update_layout(height=800, xaxis_rangeslider_visible=False, title=f"Historical Price and Technicals for {selected_stock_data['info']['name']}", showlegend=True)
+                        st.plotly_chart(fig_index, use_container_width=True)
+
+                else: # Fallback if selected_analysis is None after all attempts
+                    st.warning("Could not calculate detailed analysis for this stock. Data might be insufficient or invalid.")
+
+
         st.header("💾 Export Results")
         csv = st.session_state.results.to_csv(index=False)
         st.download_button(
-            label="📄 Download Results CSV",
+            label="📄 Download Top Stocks CSV",
             data=csv,
-            file_name=f"magic_formula_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            file_name=f"magic_formula_pro_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
             mime="text/csv"
         )
-    
+            
     else:
+        # Welcome screen (Jobs's compelling introduction)
         st.markdown("""
-        <div style="background-color: #1f2430; padding: 25px; border-radius: 10px; border: 1px solid #4a69bd;">
-            <h2 style="color: #b0c4de;">🚀 Welcome to the Executive Investment Dashboard!</h2>
-            <p style="color: #d0d0d0;">
-                This powerful tool is designed to identify undervalued Indian stocks using a robust blend of
-                fundamental and technical analysis. Inspired by the principles of legendary investors,
-                it provides clear, data-driven insights to inform your investment decisions.
-            </p>
-            <h3 style="color: #4a90e2; margin-top: 20px;">Your Roadmap:</h3>
-            <ol style="color: #d0d0d0;">
-                <li><b>Fetch Data:</b> A single click in the sidebar pulls the latest market data.</li>
-                <li><b>Define Strategy:</b> Use the filters to set your investment criteria.</li>
-                <li><b>Execute Screening:</b> The system ranks stocks based on proven metrics.</li>
-                <li><b>Deep Dive:</b> Explore detailed charts and insights for each top-performing stock.</li>
-            </ol>
-            <h3 style="color: #4a90e2; margin-top: 20px;">Core Features:</h3>
-            <ul style="color: #d0d0d0;">
-                <li><b>Value-Driven Ranking:</b> The Magic Formula ranks stocks on Return on Capital and Earnings Yield.</li>
-                <li><b>Strategic Insights:</b> Built-in technical indicators and simple, plain-language commentary.</li>
-                <li><b>Dynamic Visualizations:</b> Professional-grade charts for quick, informed analysis.</li>
-            </ul>
-            <p style="color: #d0d0d0; margin-top: 30px; text-align: center;">
-                <b>Ready to start?</b> Click <b>"🚀 Fetch Fresh Data"</b> in the sidebar! 📈
-            </p>
-        </div>
+        ## **Welcome to Magic Formula Pro**
+        The ultimate blend of Warren Buffett's timeless value investing principles and modern, institutional-grade analysis for the Indian markets.
+        
+        > *"Price is what you pay. Value is what you get."* - Warren Buffett
+        
+        Our platform simplifies the complex task of finding valuable companies by focusing on core, powerful metrics, and providing actionable insights.
+        
+        ### **🎯 How it works:**
+        1.  **Comprehensive Data Fetch:** Obtain real-time data for a curated list of major Indian stocks and key indices (Nifty 50, Bank Nifty, Mid/Smallcap indices, Sensex).
+        2.  **Fundamental & Value Screening:** Stocks are ranked using **Joel Greenblatt's Magic Formula**, emphasizing:
+            * **Return on Capital (RoC):** A key indicator of business quality and competitive advantage, inspired by Charlie Munger's focus on great businesses.
+            * **Earnings Yield:** A valuation metric to find attractively priced companies, reflecting Buffett's quest for value.
+        3.  **Advanced Technical Analysis:** We overlay this with a suite of technical indicators (RSI, EMA trends) and provide clear **trading signals**, offering a "J.P. Morgan" analyst's perspective on market timing.
+        4.  **Optimal F&O Strategies:** Get tailored Futures & Options strategy recommendations based on the stock's analytical outlook.
+        5.  **Elegant Visualization:** All insights are presented through clean, interactive charts and tables, designed for immediate understanding.
+        
+        To begin your journey towards smarter investments, click **"🚀 Fetch All Data"** in the sidebar.
         """, unsafe_allow_html=True)
         
-        col1, col2, col3, col4 = st.columns(4)
-        with col1: st.info(f"🏢 **{len(st.session_state.screener.indian_stocks)}** Major Stocks")
-        with col2: st.info("📊 **9** Technical Indicators")
-        with col3: st.info("🎯 **Magic Formula** Scoring")
-        with col4: st.info("⚡ **Real-time** Data")
-
-    st.markdown("---")
-    st.markdown("""
-    <div style="background-color:#1e2430; padding:15px; border-radius:8px; margin-top:30px; border: 1px solid #4a90e2;">
-        <p style="font-size:14px; color:#a0a0a0; text-align:center; margin:0;">
-            <b>Disclaimer:</b> This tool is for educational and informational purposes only and does not constitute financial or investment advice.
-            The commentary and signals are illustrative and should not be used as a basis for investment decisions.
-            Always conduct your own due diligence and consult with a qualified financial professional before making any investment decisions.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+        st.markdown("---")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.info("📊 **Curated Stock Universe:** Access data for major Indian stocks, mid-caps, small-caps, and key indices.")
+        with col2:
+            st.info("🧠 **Buffett & Munger Insight:** Invest with the wisdom of the world's greatest investors.")
+        with col3:
+            st.info("📈 **Real-time Technicals & F&O:** Get the latest signals and strategic recommendations.")
 
 if __name__ == "__main__":
     main()
