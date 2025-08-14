@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 import random
 
 # Suppress warnings for cleaner output in Streamlit
-warnings.filterfilter('ignore')
+warnings.filterwarnings('ignore')
 
 class MagicFormulaPro:
     """
@@ -23,7 +23,7 @@ class MagicFormulaPro:
     Now enhanced with price positioning and timeframe-specific signals.
     """
     
-    def _init_(self):
+    def __init__(self):
         self.all_stocks_info = self._get_indian_stocks_and_indexes_list()
         self.stock_data = {}  # Stores fetched raw data and calculated indicators
         self.screened_results = pd.DataFrame()
@@ -224,7 +224,7 @@ class MagicFormulaPro:
         strategy = base_strategies.get(signal, "No specific intraday F&O strategy recommended.")
         
         # Add price position context
-        position_context = f"\n*💡 Price Position Context:* Currently {price_position.replace('_', ' ').lower()}"
+        position_context = f"\n*💡 Price Position Context:* Currently {price_position.replace('_', ' ').lower() if price_position else 'unknown'}"
         if abs(ema20_distance) > 3:
             position_context += f" (Price is {abs(ema20_distance):.1f}% {'above' if ema20_distance > 0 else 'below'} EMA20 - expect mean reversion)"
 
@@ -289,7 +289,7 @@ class MagicFormulaPro:
         strategy = base_strategies.get(signal, "No specific long-term F&O strategy recommended.")
         
         # Add price position and fundamental context
-        position_context = f"\n*📍 Current Position:* Price is {price_position.replace('_', ' ').lower()}"
+        position_context = f"\n*📍 Current Position:* Price is {price_position.replace('_', ' ').lower() if price_position else 'unknown'}"
         if abs(ema20_distance) > 5:
             position_context += f" ({abs(ema20_distance):.1f}% {'above' if ema20_distance > 0 else 'below'} EMA20)"
         
@@ -308,7 +308,7 @@ class MagicFormulaPro:
         else:
             period = "1y"  # 1 year for long-term analysis
         
-        cache_key = f"{ticker}{period}{timeframe}"
+        cache_key = f"{ticker}_{period}_{timeframe}"
         current_time = time.time()
         
         # Check cache: Data is considered fresh for different durations
@@ -376,19 +376,557 @@ class MagicFormulaPro:
         """Generates realistic fundamental data based on ticker and price patterns"""
         current_price = float(price_data['Close'].iloc[-1]) if not price_data['Close'].empty else 100
         
-        # Add more methods here based on your needs
+        # Generate realistic market cap based on price patterns
+        volatility = price_data['Close'].pct_change().std() * np.sqrt(252) if len(price_data) > 1 else 0.3
+        
+        # Estimate market cap based on price and volatility (higher price usually means larger companies)
+        if current_price > 3000:
+            market_cap_multiplier = random.randint(50000000, 200000000)  # Large cap
+        elif current_price > 1000:
+            market_cap_multiplier = random.randint(10000000, 50000000)   # Mid cap
+        else:
+            market_cap_multiplier = random.randint(1000000, 10000000)    # Small cap
+            
         return {
             "currentPrice": current_price,
-            "marketCap": current_price * random.randint(1000000, 50000000),
+            "marketCap": current_price * market_cap_multiplier,
             "sector": "Unknown",
-            "industry": "Unknown"
+            "industry": "Unknown",
+            "volatility": volatility,
+            "priceToBook": random.uniform(0.5, 5.0),
+            "priceToSales": random.uniform(0.5, 10.0),
+            "returnOnEquity": random.uniform(5, 25),
+            "debtToEquity": random.uniform(0.1, 2.0)
         }
 
     def _calculate_technical_indicators(self, data: pd.DataFrame, timeframe: str) -> pd.DataFrame:
         """Calculate technical indicators based on timeframe"""
-        # Add your technical indicator calculations here
+        if len(data) < 20:
+            return data
+            
+        # Calculate EMAs
+        data['EMA_20'] = data['Close'].ewm(span=20).mean()
+        data['EMA_50'] = data['Close'].ewm(span=50).mean() if len(data) >= 50 else data['Close'].ewm(span=len(data)//2).mean()
+        
+        # Calculate RSI
+        delta = data['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        data['RSI'] = 100 - (100 / (1 + rs))
+        
+        # Calculate MACD
+        exp1 = data['Close'].ewm(span=12).mean()
+        exp2 = data['Close'].ewm(span=26).mean()
+        data['MACD'] = exp1 - exp2
+        data['MACD_Signal'] = data['MACD'].ewm(span=9).mean()
+        data['MACD_Histogram'] = data['MACD'] - data['MACD_Signal']
+        
+        # Calculate Bollinger Bands
+        data['BB_Middle'] = data['Close'].rolling(window=20).mean()
+        bb_std = data['Close'].rolling(window=20).std()
+        data['BB_Upper'] = data['BB_Middle'] + (bb_std * 2)
+        data['BB_Lower'] = data['BB_Middle'] - (bb_std * 2)
+        
+        # Volume indicators
+        if 'Volume' in data.columns:
+            data['Volume_SMA'] = data['Volume'].rolling(window=20).mean()
+        
         return data
 
-# Fix the main execution check
-if _name_ == "_main_":
+    def analyze_stock(self, ticker: str, timeframe: str = "Long Term") -> Dict:
+        """
+        Comprehensive stock analysis including technical indicators and signals
+        """
+        if ticker not in self.stock_data:
+            return {"error": "Stock data not found. Please fetch data first."}
+        
+        stock_data = self.stock_data[ticker]
+        price_data = stock_data['price_data']
+        
+        if price_data.empty:
+            return {"error": "No price data available for analysis."}
+        
+        current_price = price_data['Close'].iloc[-1]
+        
+        # Technical Analysis
+        analysis = {}
+        
+        # RSI Analysis
+        if 'RSI' in price_data.columns and not pd.isna(price_data['RSI'].iloc[-1]):
+            rsi = price_data['RSI'].iloc[-1]
+            analysis['rsi'] = rsi
+            if rsi > 70:
+                analysis['rsi_signal'] = "OVERBOUGHT"
+            elif rsi < 30:
+                analysis['rsi_signal'] = "OVERSOLD"
+            else:
+                analysis['rsi_signal'] = "NEUTRAL"
+        
+        # EMA Analysis
+        if 'EMA_20' in price_data.columns and not pd.isna(price_data['EMA_20'].iloc[-1]):
+            ema20 = price_data['EMA_20'].iloc[-1]
+            ema20_distance = ((current_price - ema20) / ema20) * 100
+            analysis['ema20_distance_pct'] = ema20_distance
+            
+            if ema20_distance > 5:
+                analysis['price_position'] = "FAR_ABOVE_EMA20"
+            elif ema20_distance > 2:
+                analysis['price_position'] = "ABOVE_EMA20"
+            elif ema20_distance > -2:
+                analysis['price_position'] = "NEAR_EMA20"
+            elif ema20_distance > -5:
+                analysis['price_position'] = "BELOW_EMA20"
+            else:
+                analysis['price_position'] = "FAR_BELOW_EMA20"
+        
+        # MACD Analysis
+        if all(col in price_data.columns for col in ['MACD', 'MACD_Signal']) and not pd.isna(price_data['MACD'].iloc[-1]):
+            macd = price_data['MACD'].iloc[-1]
+            macd_signal = price_data['MACD_Signal'].iloc[-1]
+            analysis['macd'] = macd
+            analysis['macd_signal'] = macd_signal
+            
+            if macd > macd_signal:
+                analysis['macd_trend'] = "BULLISH"
+            else:
+                analysis['macd_trend'] = "BEARISH"
+        
+        # Overall Signal Generation
+        signals = []
+        
+        # RSI contribution
+        if 'rsi_signal' in analysis:
+            if analysis['rsi_signal'] == "OVERSOLD":
+                signals.append(2)  # Buy signal
+            elif analysis['rsi_signal'] == "OVERBOUGHT":
+                signals.append(-2)  # Sell signal
+            else:
+                signals.append(0)
+        
+        # MACD contribution
+        if 'macd_trend' in analysis:
+            if analysis['macd_trend'] == "BULLISH":
+                signals.append(1)
+            else:
+                signals.append(-1)
+        
+        # Price position contribution
+        if 'price_position' in analysis:
+            if analysis['price_position'] in ["FAR_BELOW_EMA20", "BELOW_EMA20"]:
+                signals.append(1)  # Potential buy opportunity
+            elif analysis['price_position'] in ["FAR_ABOVE_EMA20", "ABOVE_EMA20"]:
+                signals.append(-1)  # Potential sell opportunity
+            else:
+                signals.append(0)
+        
+        # Generate overall signal
+        if signals:
+            total_signal = sum(signals)
+            if total_signal >= 3:
+                analysis['overall_signal'] = "STRONG_BUY"
+            elif total_signal >= 1:
+                analysis['overall_signal'] = "BUY"
+            elif total_signal >= 0:
+                analysis['overall_signal'] = "WEAK_BUY"
+            elif total_signal >= -1:
+                analysis['overall_signal'] = "HOLD"
+            elif total_signal >= -2:
+                analysis['overall_signal'] = "WEAK_SELL"
+            elif total_signal >= -3:
+                analysis['overall_signal'] = "SELL"
+            else:
+                analysis['overall_signal'] = "STRONG_SELL"
+        else:
+            analysis['overall_signal'] = "HOLD"
+        
+        # Store analysis in stock data
+        self.stock_data[ticker]['analysis'] = analysis
+        
+        return analysis
+
+    def fetch_multiple_stocks(self, stock_list: List[Dict], timeframe: str = "Long Term", max_workers: int = 5) -> Dict[str, Dict]:
+        """
+        Fetch multiple stocks concurrently with progress tracking
+        """
+        results = {}
+        
+        # Create progress bar
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
+            future_to_stock = {
+                executor.submit(self.fetch_single_stock, stock, "1y", timeframe): stock 
+                for stock in stock_list
+            }
+            
+            completed = 0
+            total = len(stock_list)
+            
+            for future in as_completed(future_to_stock):
+                stock = future_to_stock[future]
+                ticker = stock['ticker']
+                
+                try:
+                    result = future.result()
+                    if result:
+                        results[ticker] = result
+                        self.stock_data[ticker] = result
+                        status_text.text(f"✅ Fetched {stock['name']} ({ticker})")
+                    else:
+                        status_text.text(f"❌ Failed to fetch {stock['name']} ({ticker})")
+                except Exception as e:
+                    status_text.text(f"❌ Error fetching {stock['name']} ({ticker}): {str(e)}")
+                
+                completed += 1
+                progress_bar.progress(completed / total)
+        
+        progress_bar.empty()
+        status_text.empty()
+        
+        return results
+
+    def create_stock_chart(self, ticker: str, timeframe: str = "Long Term") -> go.Figure:
+        """
+        Creates an advanced stock chart with technical indicators
+        """
+        if ticker not in self.stock_data:
+            return go.Figure().add_annotation(text="No data available", xref="paper", yref="paper", x=0.5, y=0.5)
+        
+        stock_data = self.stock_data[ticker]
+        df = stock_data['price_data'].copy()
+        stock_info = stock_data['info']
+        
+        if df.empty:
+            return go.Figure().add_annotation(text="No price data available", xref="paper", yref="paper", x=0.5, y=0.5)
+        
+        # Create subplots
+        fig = make_subplots(
+            rows=3, cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.05,
+            row_heights=[0.6, 0.2, 0.2],
+            subplot_titles=('Price & Technical Indicators', 'RSI', 'MACD')
+        )
+        
+        # Candlestick chart
+        fig.add_trace(
+            go.Candlestick(
+                x=df.index,
+                open=df['Open'],
+                high=df['High'],
+                low=df['Low'],
+                close=df['Close'],
+                name='Price',
+                increasing_line_color='#00ff88',
+                decreasing_line_color='#ff4444'
+            ),
+            row=1, col=1
+        )
+        
+        # Add EMAs
+        if 'EMA_20' in df.columns:
+            fig.add_trace(
+                go.Scatter(x=df.index, y=df['EMA_20'], name='EMA 20', 
+                          line=dict(color='orange', width=2)),
+                row=1, col=1
+            )
+        
+        if 'EMA_50' in df.columns:
+            fig.add_trace(
+                go.Scatter(x=df.index, y=df['EMA_50'], name='EMA 50', 
+                          line=dict(color='blue', width=2)),
+                row=1, col=1
+            )
+        
+        # Add Bollinger Bands
+        if all(col in df.columns for col in ['BB_Upper', 'BB_Lower', 'BB_Middle']):
+            fig.add_trace(
+                go.Scatter(x=df.index, y=df['BB_Upper'], name='BB Upper',
+                          line=dict(color='gray', width=1, dash='dash')),
+                row=1, col=1
+            )
+            fig.add_trace(
+                go.Scatter(x=df.index, y=df['BB_Lower'], name='BB Lower',
+                          line=dict(color='gray', width=1, dash='dash'),
+                          fill='tonexty', fillcolor='rgba(128,128,128,0.1)'),
+                row=1, col=1
+            )
+        
+        # RSI
+        if 'RSI' in df.columns:
+            fig.add_trace(
+                go.Scatter(x=df.index, y=df['RSI'], name='RSI',
+                          line=dict(color='purple', width=2)),
+                row=2, col=1
+            )
+            # RSI levels
+            fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
+            fig.add_hline(y=30, line_dash="dash", line_color="green", row=2, col=1)
+            fig.add_hline(y=50, line_dash="dot", line_color="gray", row=2, col=1)
+        
+        # MACD
+        if all(col in df.columns for col in ['MACD', 'MACD_Signal', 'MACD_Histogram']):
+            fig.add_trace(
+                go.Scatter(x=df.index, y=df['MACD'], name='MACD',
+                          line=dict(color='blue', width=2)),
+                row=3, col=1
+            )
+            fig.add_trace(
+                go.Scatter(x=df.index, y=df['MACD_Signal'], name='Signal',
+                          line=dict(color='red', width=2)),
+                row=3, col=1
+            )
+            fig.add_trace(
+                go.Bar(x=df.index, y=df['MACD_Histogram'], name='Histogram',
+                       marker_color='gray', opacity=0.7),
+                row=3, col=1
+            )
+        
+        # Update layout
+        fig.update_layout(
+            title=f"{stock_info['name']} ({ticker}) - {timeframe} Analysis",
+            xaxis_rangeslider_visible=False,
+            height=800,
+            showlegend=True,
+            template="plotly_dark"
+        )
+        
+        # Update y-axes
+        fig.update_yaxes(title_text="Price (₹)", row=1, col=1)
+        fig.update_yaxes(title_text="RSI", row=2, col=1, range=[0, 100])
+        fig.update_yaxes(title_text="MACD", row=3, col=1)
+        
+        return fig
+
+def main():
+    """Main Streamlit application"""
+    st.set_page_config(
+        page_title="Magic Formula Pro",
+        page_icon="🚀",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+    
+    # Custom CSS
+    st.markdown("""
+    <style>
+    .main-header {
+        font-size: 3rem;
+        font-weight: bold;
+        text-align: center;
+        background: linear-gradient(90deg, #ff6b6b, #4ecdc4);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 2rem;
+    }
+    .metric-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 1rem;
+        border-radius: 10px;
+        margin: 0.5rem 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Header
+    st.markdown('<h1 class="main-header">🚀 Magic Formula Pro</h1>', unsafe_allow_html=True)
+    st.markdown("""
+    <div style='text-align: center; margin-bottom: 2rem;'>
+        <h3>The Ultimate Indian Stock Analysis Platform</h3>
+        <p>Combining Greenblatt's Magic Formula with advanced technical analysis for Indian markets</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Initialize the app
+    if 'magic_formula' not in st.session_state:
+        st.session_state.magic_formula = MagicFormulaPro()
+    
+    magic_formula = st.session_state.magic_formula
+    
+    # Sidebar
+    with st.sidebar:
+        st.header("🎯 Analysis Settings")
+        
+        # Timeframe selection
+        timeframe = st.selectbox(
+            "📊 Select Analysis Timeframe",
+            ["Long Term", "Intraday"],
+            help="Choose between long-term value investing or intraday trading analysis"
+        )
+        
+        # Stock selection mode
+        analysis_mode = st.radio(
+            "🔍 Analysis Mode",
+            ["Single Stock Analysis", "Portfolio Screening", "Market Overview"]
+        )
+        
+        st.markdown("---")
+        
+        # Quick info based on timeframe
+        if timeframe == "Intraday":
+            st.info("⚡ **Intraday Mode:** Fast scalping, F&O strategies, 15-min intervals")
+        else:
+            st.info("📈 **Long Term Mode:** Value discovery, fundamental analysis, daily data")
+    
+    # Main content based on analysis mode
+    if analysis_mode == "Single Stock Analysis":
+        st.header("🎯 Single Stock Deep Analysis")
+        
+        # Stock selector
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            # Create a searchable dropdown
+            stock_names = [f"{stock['name']} ({stock['ticker']})" for stock in magic_formula.all_stocks_info]
+            selected_stock_display = st.selectbox(
+                "🔍 Select Stock for Analysis",
+                stock_names,
+                help="Choose from major Indian stocks and indices"
+            )
+        
+        with col2:
+            analyze_button = st.button("📊 Analyze Stock", type="primary")
+        
+        if analyze_button and selected_stock_display:
+            # Extract ticker from display name
+            ticker = selected_stock_display.split("(")[1].split(")")[0]
+            selected_stock = next((stock for stock in magic_formula.all_stocks_info if stock['ticker'] == ticker), None)
+            
+            if selected_stock:
+                with st.spinner(f"🔄 Analyzing {selected_stock['name']}..."):
+                    # Fetch stock data
+                    result = magic_formula.fetch_single_stock(selected_stock, timeframe=timeframe)
+                    
+                    if result:
+                        # Perform analysis
+                        analysis = magic_formula.analyze_stock(ticker, timeframe)
+                        
+                        # Display results
+                        col1, col2 = st.columns([2, 1])
+                        
+                        with col1:
+                            # Stock chart
+                            fig = magic_formula.create_stock_chart(ticker, timeframe)
+                            st.plotly_chart(fig, use_container_width=True)
+                        
+                        with col2:
+                            # Key metrics and analysis
+                            st.subheader("📊 Key Metrics")
+                            
+                            current_price = result.get('current_price', 'N/A')
+                            st.metric("Current Price", f"₹{current_price:.2f}" if isinstance(current_price, (int, float)) else current_price)
+                            
+                            if 'analysis' in result:
+                                analysis_data = result['analysis']
+                                
+                                # Overall signal
+                                signal = analysis_data.get('overall_signal', 'N/A')
+                                signal_colors = {
+                                    'STRONG_BUY': '🟢', 'BUY': '🔵', 'WEAK_BUY': '🟡',
+                                    'HOLD': '⚪', 'WEAK_SELL': '🟠', 'SELL': '🔴', 'STRONG_SELL': '⚫'
+                                }
+                                st.markdown(f"**Overall Signal:** {signal_colors.get(signal, '⚪')} {signal}")
+                                
+                                # Technical indicators
+                                if 'rsi' in analysis_data:
+                                    rsi = analysis_data['rsi']
+                                    st.metric("RSI", f"{rsi:.1f}", help="Relative Strength Index")
+                                
+                                if 'ema20_distance_pct' in analysis_data:
+                                    ema_dist = analysis_data['ema20_distance_pct']
+                                    st.metric("Distance from EMA20", f"{ema_dist:.1f}%")
+                        
+                        # F&O Strategy section
+                        st.subheader("🎯 F&O Strategy Recommendation")
+                        strategy = magic_formula._get_fo_strategies(ticker, timeframe)
+                        st.markdown(strategy)
+                        
+                        # Fundamental data
+                        if 'fundamentals' in result:
+                            st.subheader("📈 Fundamental Overview")
+                            fundamentals = result['fundamentals']
+                            
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                market_cap = fundamentals.get('marketCap', 'N/A')
+                                if isinstance(market_cap, (int, float)):
+                                    st.metric("Market Cap", f"₹{market_cap/10000000:.1f}Cr")
+                                else:
+                                    st.metric("Market Cap", market_cap)
+                            
+                            with col2:
+                                sector = fundamentals.get('sector', 'N/A')
+                                st.metric("Sector", sector)
+                            
+                            with col3:
+                                pb_ratio = fundamentals.get('priceToBook', 'N/A')
+                                if isinstance(pb_ratio, (int, float)):
+                                    st.metric("P/B Ratio", f"{pb_ratio:.2f}")
+                                else:
+                                    st.metric("P/B Ratio", pb_ratio)
+                    
+                    else:
+                        st.error(f"❌ Failed to fetch data for {selected_stock['name']}. Please try again.")
+    
+    elif analysis_mode == "Portfolio Screening":
+        st.header("📊 Portfolio Screening")
+        st.info("🚧 Portfolio screening feature coming soon! This will allow you to screen multiple stocks based on Magic Formula criteria.")
+        
+        # Show available stocks
+        with st.expander("📋 Available Stocks Database"):
+            stocks_df = pd.DataFrame(magic_formula.all_stocks_info)
+            st.dataframe(stocks_df, use_container_width=True)
+    
+    else:  # Market Overview
+        st.header("🌏 Market Overview")
+        
+        # Major indices
+        major_indices = [
+            stock for stock in magic_formula.all_stocks_info 
+            if stock['sector'] == 'Index' and stock['ticker'] in ['^NSEI', '^NSEBANK', '^BSESN']
+        ]
+        
+        if st.button("📊 Fetch Major Indices", type="primary"):
+            with st.spinner("🔄 Fetching market overview..."):
+                results = magic_formula.fetch_multiple_stocks(major_indices, timeframe, max_workers=3)
+                
+                if results:
+                    cols = st.columns(len(results))
+                    for i, (ticker, data) in enumerate(results.items()):
+                        with cols[i % len(cols)]:
+                            current_price = data.get('current_price', 'N/A')
+                            stock_name = data['info']['name']
+                            
+                            # Calculate daily change if possible
+                            price_data = data.get('price_data')
+                            if price_data is not None and len(price_data) > 1:
+                                prev_close = price_data['Close'].iloc[-2]
+                                current_close = price_data['Close'].iloc[-1]
+                                change = ((current_close - prev_close) / prev_close) * 100
+                                
+                                st.metric(
+                                    stock_name,
+                                    f"{current_close:.2f}",
+                                    delta=f"{change:.2f}%"
+                                )
+                            else:
+                                st.metric(stock_name, f"{current_price:.2f}" if isinstance(current_price, (int, float)) else current_price)
+    
+    # Footer
+    st.markdown("---")
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.info("💡 **Tip:** Use Long Term mode for value investing and Intraday mode for scalping strategies. Always do your own research before investing!")
+    
+    with col2:
+        if timeframe == "Intraday":
+            st.warning("⚠️ **Intraday Mode:** High-frequency data, suitable for day trading")
+        else:
+            st.success("📈 **Long Term Mode:** Perfect for fundamental analysis and value investing")
+
+if __name__ == "__main__":
     main()
