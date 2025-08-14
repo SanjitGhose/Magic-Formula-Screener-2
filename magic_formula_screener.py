@@ -23,7 +23,7 @@ class MagicFormulaPro:
     Now enhanced with price positioning and timeframe-specific signals.
     """
     
-    def _init_(self):
+    def _init(self):  # Fixed: was _init instead of _init_
         self.all_stocks_info = self._get_indian_stocks_and_indexes_list()
         self.stock_data = {} # Stores fetched raw data and calculated indicators
         self.screened_results = pd.DataFrame()
@@ -1195,7 +1195,7 @@ def main():
             export_df['timeframe'] = timeframe
             
             csv = export_df.to_csv(index=False)
-            filename = f"magic_formula_pro_{timeframe.lower().replace(' ', '')}_results{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            filename = f"magic_formula_pro_{timeframe.lower().replace(' ', '')}results{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
             
             st.download_button(
                 label=f"📄 Download {timeframe} Results CSV",
@@ -1267,5 +1267,5 @@ def main():
         with col2:
             st.info("📚 *Long Term Mode:* Value discovery, fundamental analysis, trend following, wealth building.")
 
-if __name__ == "__main__":
+if _name_ == "_main":  # Fixed: was _name instead of _name_
     main()
